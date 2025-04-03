@@ -557,28 +557,28 @@ function Update-PowerShellProfile {
         }
 
         # Always use the ISE-aware Oh My Posh configuration
-        $newOhMyPoshConfig = @"
+        $newOhMyPoshConfig = @'
 # Oh My Posh Theme - Only initialize in compatible terminals, not in ISE
 try {
     # Check if running in PowerShell ISE
-    `$isInISE = `$false
+    $isInISE = $false
     if (Get-Command Get-Variable -ErrorAction SilentlyContinue) {
         if (Get-Variable -Name psISE -ErrorAction SilentlyContinue) {
-            `$isInISE = `$true
+            $isInISE = $true
         }
     }
 
-    if (-not `$isInISE) {
+    if (-not $isInISE) {
         # Only initialize Oh My Posh in regular console
-        oh-my-posh init pwsh --config "`$env:POSH_THEMES_PATH\$($THEME).omp.json" | Invoke-Expression
+        oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH\THEME_NAME.omp.json" | Invoke-Expression
     } else {
         # PowerShell ISE doesn't support ANSI color codes used by Oh My Posh
         Write-Host "Oh My Posh is disabled in PowerShell ISE, using simplified theme instead" -ForegroundColor Cyan
     }
 } catch {
-    Write-Host "Oh My Posh initialization failed: `$_" -ForegroundColor Yellow
+    Write-Host "Oh My Posh initialization failed: $_" -ForegroundColor Yellow
 }
-"@
+'@ -replace 'THEME_NAME', $THEME
 
         $ohMyPoshConfigured = $false
         $existingTheme = $null
