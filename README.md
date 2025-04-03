@@ -19,17 +19,13 @@ Automatically style your terminal environment for Windows with Oh My Posh, custo
 ##### Option 1: Download and run (recommended)
 Copy & paste it to your admin terminal:
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/terminal-styling/style_terminal_w11.ps1" -OutFile "$env:TEMP\style_terminal_w11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force
-& "$env:TEMP\style_terminal_w11.ps1"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/terminal-styling/style_terminal_w11.ps1" -OutFile "$env:TEMP\style_terminal_w11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force & "$env:TEMP\style_terminal_w11.ps1"
 ```
 
 ##### Option 2: Clone and run locally
 Copy & paste it to your admin terminal:
 ```powershell
-git clone https://github.com/F00L1X/wsflx.git
-cd wsflx/terminal-styling
-Set-ExecutionPolicy Bypass -Scope Process -Force
-.\style_terminal_w11.ps1
+git clone https://github.com/F00L1X/wsflx.git; cd wsflx/terminal-styling; Set-ExecutionPolicy Bypass -Scope Process -Force; .\style_terminal_w11.ps1
 ```
 
 [Learn more about Terminal Styling](terminal-styling/readme.md)

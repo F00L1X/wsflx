@@ -2,8 +2,31 @@
 # This script installs Oh My Posh and configures fonts for PowerShell, Windows Terminal, and VS Code
 # Author: WSFLX
 # Version: 1.0
+# IMPORTANT: This script requires administrative privileges
 
 $ErrorActionPreference = "Stop"
+
+# Check for administrative privileges
+function Test-Administrator {
+    $user = [Security.Principal.WindowsIdentity]::GetCurrent()
+    $principal = New-Object Security.Principal.WindowsPrincipal($user)
+    return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# If not running as administrator, provide instructions and exit
+if (-not (Test-Administrator)) {
+    Write-Host "`n[ERROR] This script requires administrative privileges." -ForegroundColor Red
+    Write-Host "`nPlease run this script in an administrative PowerShell window:" -ForegroundColor Yellow
+    Write-Host "1. Right-click on PowerShell and select 'Run as administrator'" -ForegroundColor Yellow
+    Write-Host "2. Navigate to the script location" -ForegroundColor Yellow
+    Write-Host "3. Run the script again" -ForegroundColor Yellow
+    Write-Host "`nScript execution terminated." -ForegroundColor Red
+
+    # Pause to keep the window open so the user can read the message
+    Write-Host "`nPress any key to exit..." -ForegroundColor Cyan
+    $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
+    exit 1
+}
 
 function Write-ColorOutput {
     param (
@@ -30,72 +53,31 @@ function Install-NerdFont {
     Write-ColorOutput "Installing Nerd Fonts..." "Yellow"
 
     try {
-        # Get the latest release version from GitHub API
-        Write-ColorOutput "Fetching latest Nerd Font release information..." "Yellow"
-        $apiUrl = "https://api.github.com/repos/ryanoasis/nerd-fonts/releases/latest"
-
-        # Use TLS 1.2 for older Windows versions
-        [Net.ServicePointManager]::SecurityProtocol = [Net.SecurityProtocolType]::Tls12
-
-        $latestRelease = Invoke-RestMethod -Uri $apiUrl -ErrorAction Stop
-        $latestVersion = $latestRelease.tag_name
-
-        Write-ColorOutput "Found latest Nerd Font version: $latestVersion" "Green"
-        $fontUrl = "https://github.com/ryanoasis/nerd-fonts/releases/download/$latestVersion/Meslo.zip"
-    }
-    catch {
-        Write-ColorOutput "Failed to fetch latest release, using fallback version: $_" "Yellow"
-        # Fallback to a known version if API call fails
-        $fontUrl = "https://github.com/ryanoasis/nerd-fonts/releases/download/v3.2.1/Meslo.zip"
-    }
-
-    $tempFolder = Join-Path $env:TEMP "NerdFonts"
-    $fontZip = Join-Path $tempFolder "Meslo.zip"
-
-    # Create temp folder if it doesn't exist
-    if (-not (Test-Path $tempFolder)) {
-        New-Item -ItemType Directory -Path $tempFolder -Force | Out-Null
-    }
-
-    # Download font
-    try {
-        Invoke-WebRequest -Uri $fontUrl -OutFile $fontZip
-        Write-ColorOutput "Font downloaded successfully." "Green"
-    } catch {
-        Write-ColorOutput "Failed to download font: $_" "Red"
-        return $false
-    }
-
-    # Extract font
-    try {
-        Expand-Archive -Path $fontZip -DestinationPath $tempFolder -Force
-        Write-ColorOutput "Font extracted successfully." "Green"
-    } catch {
-        Write-ColorOutput "Failed to extract font: $_" "Red"
-        return $false
-    }
-
-    # Install font
-    try {
-        $fonts = (New-Object -ComObject Shell.Application).Namespace(0x14)
-        foreach ($file in Get-ChildItem -Path $tempFolder -Recurse -Include "*.ttf", "*.otf") {
-            $fileName = $file.Name
-            if (Test-Path -Path "$env:WINDIR\Fonts\$fileName") {
-                Write-ColorOutput "Font $fileName already installed." "Cyan"
-            } else {
-                $fonts.CopyHere($file.FullName)
-                Write-ColorOutput "Font $fileName installed." "Green"
+        # First make sure Oh My Posh is installed
+        if (-not (Test-CommandExists "oh-my-posh")) {
+            Write-ColorOutput "Oh My Posh needs to be installed first before we can install fonts." "Yellow"
+            $ohMyPoshInstalled = Install-OhMyPosh
+            if (-not $ohMyPoshInstalled) {
+                Write-ColorOutput "Failed to install Oh My Posh, cannot proceed with font installation." "Red"
+                return $false
             }
         }
-        return $true
-    } catch {
-        Write-ColorOutput "Failed to install font: $_" "Red"
-        return $false
-    } finally {
-        # Clean up
-        if (Test-Path $tempFolder) {
-            Remove-Item -Path $tempFolder -Recurse -Force -ErrorAction SilentlyContinue
+
+        # Use Oh My Posh's built-in font installation
+        Write-ColorOutput "Installing Meslo font using Oh My Posh..." "Yellow"
+        Invoke-Expression "oh-my-posh font install Meslo"
+
+        if ($LASTEXITCODE -eq 0) {
+            Write-ColorOutput "Meslo Nerd Font installed successfully using Oh My Posh." "Green"
+            return $true
+        } else {
+            Write-ColorOutput "Oh My Posh font installation returned an error. Exit code: $LASTEXITCODE" "Red"
+            return $false
         }
+    }
+    catch {
+        Write-ColorOutput "Failed during font installation: $_" "Red"
+        return $false
     }
 }
 
@@ -114,8 +96,8 @@ function Install-OhMyPosh {
             Write-ColorOutput "Installing Oh My Posh using winget..." "Yellow"
             winget install JanDeDobbeleer.OhMyPosh -e
 
-            # Refresh environment variables
-            $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+            # Refresh environment variables for current session
+            RefreshEnvironmentVariables
 
             if (Test-CommandExists "oh-my-posh") {
                 Write-ColorOutput "Oh My Posh installed successfully using winget." "Green"
@@ -135,8 +117,8 @@ function Install-OhMyPosh {
         Set-ExecutionPolicy Bypass -Scope Process -Force
         Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://ohmyposh.dev/install.ps1'))
 
-        # Refresh environment variables
-        $env:Path = [System.Environment]::GetEnvironmentVariable("Path", "Machine") + ";" + [System.Environment]::GetEnvironmentVariable("Path", "User")
+        # Refresh environment variables for current session
+        RefreshEnvironmentVariables
 
         if (Test-CommandExists "oh-my-posh") {
             Write-ColorOutput "Oh My Posh installed successfully using installer script." "Green"
@@ -147,6 +129,45 @@ function Install-OhMyPosh {
         }
     } catch {
         Write-ColorOutput "Failed to install Oh My Posh: $_" "Red"
+        return $false
+    }
+}
+
+# Add a function to refresh environment variables for the current session
+function RefreshEnvironmentVariables {
+    Write-ColorOutput "Refreshing environment variables for current session..." "Yellow"
+
+    try {
+        # Update PATH from the registry
+        $paths = @(
+            [Environment]::GetEnvironmentVariable("Path", "Machine"),
+            [Environment]::GetEnvironmentVariable("Path", "User")
+        ) | Where-Object { $_ }
+
+        # Set the combined path back to the current process
+        $env:Path = $paths -join ";"
+
+        # Check common Oh My Posh installation locations if it's still not found
+        $possibleLocations = @(
+            "$env:LOCALAPPDATA\Programs\oh-my-posh\bin",
+            "C:\Program Files\oh-my-posh\bin",
+            "$env:USERPROFILE\AppData\Local\oh-my-posh"
+        )
+
+        foreach ($location in $possibleLocations) {
+            if (Test-Path -Path $location) {
+                if (-not $env:Path.Contains($location)) {
+                    $env:Path = "$location;$env:Path"
+                    Write-ColorOutput "Added Oh My Posh location to PATH: $location" "Green"
+                }
+            }
+        }
+
+        Write-ColorOutput "Environment variables refreshed." "Green"
+        return $true
+    }
+    catch {
+        Write-ColorOutput "Failed to refresh environment variables: $_" "Red"
         return $false
     }
 }
