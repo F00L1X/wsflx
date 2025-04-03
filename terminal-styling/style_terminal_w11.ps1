@@ -572,66 +572,238 @@ function Update-PowerShellProfile {
     Write-ColorOutput "Configuring PowerShell profile..." "Yellow"
 
     try {
-        # Safe ISE detection that works on Windows 10
-        $inPowerShellISE = $false
-        try {
-            # First check if the variable exists before accessing it
-            if (Test-VariableExists -Name "psISE") {
-                $inPowerShellISE = $null -ne (Get-Variable -Name "psISE" -ValueOnly)
+        # Store original $PROFILE for error reporting
+        $originalProfile = $PROFILE
+
+        # Safely get profile paths
+        function Get-SafeProfilePath {
+            param (
+                [string]$ProfileType = "CurrentUserCurrentHost"
+            )
+
+            try {
+                # Check if $PROFILE is a string or an object with properties
+                if ($PROFILE -is [string]) {
+                    # Handle case where $PROFILE is just a string
+                    if ($ProfileType -eq "CurrentUserCurrentHost") {
+                        return $PROFILE # Return the string value directly
+                    }
+
+                    # For other profile types, try to derive based on naming conventions
+                    $profileDir = Split-Path -Parent $PROFILE
+                    $fileName = Split-Path -Leaf $PROFILE
+
+                    switch ($ProfileType) {
+                        "CurrentUserAllHosts" {
+                            return Join-Path $profileDir "profile.ps1"
+                        }
+                        "AllUsersCurrentHost" {
+                            return Join-Path (Split-Path -Parent $profileDir) "Microsoft.PowerShell_profile.ps1"
+                        }
+                        "AllUsersAllHosts" {
+                            return Join-Path (Split-Path -Parent $profileDir) "profile.ps1"
+                        }
+                        default {
+                            return $PROFILE
+                        }
+                    }
+                } else {
+                    # Try to access property using different methods
+                    if ($PROFILE.PSObject.Properties.Name -contains $ProfileType) {
+                        return $PROFILE.$ProfileType
+                    } elseif ($ProfileType -eq "CurrentUserCurrentHost" -and
+                             ($PROFILE | Get-Member -MemberType NoteProperty | Where-Object Name -eq "Path")) {
+                        return $PROFILE.Path
+                    } else {
+                        # Build path manually as fallback
+                        $basePath = if ($PROFILE -is [string]) { $PROFILE } else { $HOME }
+                        $profileDir = Join-Path $basePath "Documents\WindowsPowerShell"
+
+                        switch ($ProfileType) {
+                            "CurrentUserCurrentHost" {
+                                return Join-Path $profileDir "Microsoft.PowerShell_profile.ps1"
+                            }
+                            "CurrentUserAllHosts" {
+                                return Join-Path $profileDir "profile.ps1"
+                            }
+                            "AllUsersCurrentHost" {
+                                return "C:\Windows\System32\WindowsPowerShell\v1.0\Microsoft.PowerShell_profile.ps1"
+                            }
+                            "AllUsersAllHosts" {
+                                return "C:\Windows\System32\WindowsPowerShell\v1.0\profile.ps1"
+                            }
+                            default {
+                                return Join-Path $profileDir "Microsoft.PowerShell_profile.ps1"
+                            }
+                        }
+                    }
+                }
+            } catch {
+                # Absolute fallback
+                Write-ColorOutput "Error determining profile path for $ProfileType`: $_" "Yellow"
+                return Join-Path $HOME "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"
             }
-            # Secondary detection method based on process name
-            if (-not $inPowerShellISE) {
-                $processName = (Get-Process -Id $PID).ProcessName
-                $inPowerShellISE = $processName -eq "powershell_ise"
+        }
+
+        # More comprehensive profile detection that handles VSCode, Cursor and other editors
+        Write-ColorOutput "Detecting PowerShell profiles..." "Yellow"
+
+        # Get PowerShell version to help with detection
+        $psVersion = $PSVersionTable.PSVersion
+        $currentEdition = if ($PSVersionTable.PSEdition) { $PSVersionTable.PSEdition } else { "Desktop" }
+        Write-ColorOutput "PowerShell: v$psVersion ($currentEdition edition)" "Cyan"
+
+        # Get all possible profiles for the current user with proper error handling
+        try {
+            # First collect standard PowerShell profiles
+            $possibleProfiles = @(
+                # Current user profiles
+                [PSCustomObject]@{
+                    Path = Get-SafeProfilePath -ProfileType "CurrentUserCurrentHost";
+                    Type = "CurrentUserCurrentHost";
+                    Description = "Current user, current host";
+                    IsDefault = $true
+                },
+                [PSCustomObject]@{
+                    Path = Get-SafeProfilePath -ProfileType "CurrentUserAllHosts";
+                    Type = "CurrentUserAllHosts";
+                    Description = "Current user, all hosts";
+                    IsDefault = $false
+                }
+            )
+
+            # Add known editor-specific paths if they're not already included
+            $knownEditorPaths = @{
+                "VSCode" = @(
+                    "$HOME\Documents\PowerShell\Microsoft.VSCode_profile.ps1",
+                    "$HOME\.vscode\Microsoft.PowerShell_profile.ps1",
+                    "$HOME\.vscode\PowerShell\Microsoft.PowerShell_profile.ps1"
+                )
+                "Cursor" = @(
+                    "$HOME\Documents\PowerShell\Microsoft.Cursor_profile.ps1",
+                    "$HOME\.cursor\Microsoft.PowerShell_profile.ps1",
+                    "$HOME\.cursor\PowerShell\Microsoft.PowerShell_profile.ps1"
+                )
+            }
+
+            # Add editor-specific paths to the possible profiles
+            foreach ($editor in $knownEditorPaths.Keys) {
+                foreach ($path in $knownEditorPaths[$editor]) {
+                    # Normalize path format
+                    $normalizedPath = $path -replace '\\', [System.IO.Path]::DirectorySeparatorChar
+
+                    # Check if this path is already in our list
+                    if (-not ($possibleProfiles | Where-Object { $_.Path -eq $normalizedPath })) {
+                        $possibleProfiles += [PSCustomObject]@{
+                            Path = $normalizedPath;
+                            Type = "${editor}Profile";
+                            Description = "$editor PowerShell profile";
+                            IsDefault = $false
+                        }
+                    }
+                }
+            }
+
+            # Log all potential profiles we've found
+            Write-ColorOutput "Found these potential profile paths:" "Cyan"
+            foreach ($profile in $possibleProfiles) {
+                $exists = Test-Path $profile.Path
+                $statusMark = if ($exists) { "✓" } else { " " }
+                Write-ColorOutput "  [$statusMark] $($profile.Path) ($($profile.Description))" "Cyan"
             }
         }
         catch {
-            Write-ColorOutput "ISE detection had an issue, assuming regular PowerShell: $_" "Yellow"
-            $inPowerShellISE = $false
+            Write-ColorOutput "Error detecting potential profiles: $_" "Red"
+            # Fallback to basic detection if the advanced method fails
+            $possibleProfiles = @(
+                [PSCustomObject]@{
+                    Path = $PROFILE.CurrentUserCurrentHost;
+                    Type = "CurrentUserCurrentHost";
+                    Description = "Current user, current host";
+                    IsDefault = $true
+                }
+            )
+            Write-ColorOutput "Falling back to basic profile: $($PROFILE.CurrentUserCurrentHost)" "Yellow"
         }
 
-        if ($inPowerShellISE) {
-            Write-ColorOutput "Detected PowerShell ISE environment." "Cyan"
-            Write-ColorOutput "Note: PowerShell ISE does not support ANSI color codes used by Oh My Posh." "Yellow"
-        }
+        # Patterns to identify profile types
+        $iseProfilePattern = '\\Microsoft\.PowerShellISE_profile\.ps1$'
+        $vscodeProfilePattern = '\\Microsoft\.VSCode_profile\.ps1$|\\\.vscode\\'
+        $cursorProfilePattern = '\\Microsoft\.Cursor_profile\.ps1$|\\\.cursor\\'
+        $regularProfilePattern = '\\Microsoft\.PowerShell_profile\.ps1$|\\profile\.ps1$'
 
-        # Determine the correct profile path dynamically
+        # Filter profiles based on priority
+        # 1. First prefer existing regular profiles
+        # 2. Then look for editor-specific existing profiles
+        # 3. Finally fall back to default profile if none exist
+
+        # Try to find an existing profile, preferring non-ISE profiles
+        $existingProfiles = @($possibleProfiles |
+            Where-Object { Test-Path $_.Path } |
+            Where-Object { $_.Path -notmatch $iseProfilePattern })
+
+        # Choose the best profile based on our context
+        $profilePath = $null
         $profileType = "Default PowerShell profile"
 
-        # Get all possible profiles for the current user
-        $possibleProfiles = @(
-            [PSCustomObject]@{ Path = $PROFILE.CurrentUserCurrentHost; Type = "CurrentUserCurrentHost" },
-            [PSCustomObject]@{ Path = $PROFILE.CurrentUserAllHosts; Type = "CurrentUserAllHosts" }
-        )
+        if ($existingProfiles -ne $null -and $existingProfiles.Count -gt 0) {
+            # Prioritize different profiles based on what we're running in
 
-        # Use this to look for non-ISE specific profiles
-        $regularProfilesPattern = '\\Microsoft\.PowerShell_profile\.ps1$|\\profile\.ps1$'
-        $iseProfilePattern = '\\Microsoft\.PowerShellISE_profile\.ps1$'
+            # Check if we're running in VSCode
+            $inVSCode = $env:TERM_PROGRAM -eq "vscode" -or $host.Name -eq 'Visual Studio Code Host'
 
-        # Filter out ISE-specific profiles for regular profile update
-        $validProfiles = $possibleProfiles | Where-Object {
-            $_.Path -match $regularProfilesPattern -and
-            $_.Path -notmatch $iseProfilePattern
+            # Check if we're running in Cursor (similar detection method to VSCode)
+            $inCursor = $env:TERM_PROGRAM -eq "cursor" -or $host.Name -match 'Cursor'
+
+            # Check if we're in Windows Terminal
+            $inWindowsTerminal = $env:WT_SESSION -or $env:WT_PROFILE_ID
+
+            # Select the appropriate profile based on where we're running
+            $selectedProfile = $null
+
+            if ($inVSCode) {
+                # If we're in VSCode, prefer VSCode profile
+                Write-ColorOutput "Detected running in VSCode" "Cyan"
+                $selectedProfile = $existingProfiles | Where-Object { $_.Path -match $vscodeProfilePattern } | Select-Object -First 1
+            }
+            elseif ($inCursor) {
+                # If we're in Cursor, prefer Cursor profile
+                Write-ColorOutput "Detected running in Cursor" "Cyan"
+                $selectedProfile = $existingProfiles | Where-Object { $_.Path -match $cursorProfilePattern } | Select-Object -First 1
+            }
+            elseif ($inWindowsTerminal) {
+                # If we're in Windows Terminal, prefer regular profile
+                Write-ColorOutput "Detected running in Windows Terminal" "Cyan"
+                $selectedProfile = $existingProfiles | Where-Object { $_.Path -match $regularProfilePattern } | Select-Object -First 1
+            }
+
+            # If we didn't select a profile based on the environment, select the first regular profile
+            if (-not $selectedProfile) {
+                $selectedProfile = $existingProfiles | Where-Object { $_.Path -match $regularProfilePattern } | Select-Object -First 1
+            }
+
+            # If we still don't have a selection, just take the first existing profile
+            if (-not $selectedProfile) {
+                $selectedProfile = $existingProfiles | Select-Object -First 1
+            }
+
+            $profilePath = $selectedProfile.Path
+            $profileType = "Existing $($selectedProfile.Type) profile"
+            Write-ColorOutput "Selected profile: $profilePath" "Green"
         }
-
-        # Choose the best profile to use
-        $profilePath = $null
-
-        # First try to find an existing regular profile
-        $existingProfile = $validProfiles | Where-Object { Test-Path $_.Path } | Select-Object -First 1
-        if ($existingProfile) {
-            $profilePath = $existingProfile.Path
-            $profileType = "Existing $($existingProfile.Type) profile"
-            Write-ColorOutput "Found existing profile: $profilePath" "Cyan"
-        } else {
-            # Default to CurrentUserCurrentHost if none exists - ensuring it's not an ISE profile
-            $defaultProfile = $validProfiles | Where-Object { $_.Type -eq "CurrentUserCurrentHost" } | Select-Object -First 1
+        else {
+            # No existing profiles, create a default one
+            $defaultProfile = $possibleProfiles | Where-Object { $_.IsDefault } | Select-Object -First 1
             if ($defaultProfile) {
                 $profilePath = $defaultProfile.Path
-                $profileType = "New CurrentUserCurrentHost profile"
+                $profileType = "New $($defaultProfile.Type) profile"
                 Write-ColorOutput "No existing profile found, will create: $profilePath" "Yellow"
-            } else {
-                throw "Could not determine a suitable PowerShell profile path"
+            }
+            else {
+                # Last resort fallback
+                $profilePath = $PROFILE.CurrentUserCurrentHost
+                $profileType = "Fallback profile"
+                Write-ColorOutput "Fallback to creating profile at: $profilePath" "Yellow"
             }
         }
 
@@ -641,9 +813,12 @@ function Update-PowerShellProfile {
             Write-ColorOutput "Switching to a regular PowerShell profile instead." "Yellow"
 
             # Force use of the standard CurrentUserCurrentHost profile
-            $standardPath = $PROFILE.CurrentUserCurrentHost -replace "Microsoft\.PowerShellISE_profile\.ps1", "Microsoft.PowerShell_profile.ps1"
+            $standardPath = Get-SafeProfilePath -ProfileType "CurrentUserCurrentHost"
+            if ($standardPath -match "Microsoft\.PowerShellISE_profile\.ps1") {
+                $standardPath = $standardPath -replace "Microsoft\.PowerShellISE_profile\.ps1", "Microsoft.PowerShell_profile.ps1"
+            }
             $profilePath = $standardPath
-            $profileType = "Standard PowerShell profile"
+            $profileType = "Standard PowerShell profile (switched from ISE)"
         }
 
         Write-ColorOutput "Using $profileType at: $profilePath" "Cyan"
@@ -709,7 +884,18 @@ try {
         }
 
         # Now also configure the ISE-specific profile with a simplified theme
-        $iseProfilePath = $PROFILE.CurrentUserCurrentHost -replace "Microsoft\.PowerShell_profile\.ps1", "Microsoft.PowerShellISE_profile.ps1"
+        $currentUserPath = Get-SafeProfilePath -ProfileType "CurrentUserCurrentHost"
+        $iseProfilePath = if ($currentUserPath -notmatch "Microsoft\.PowerShellISE_profile\.ps1") {
+            $currentUserPath -replace "Microsoft\.PowerShell_profile\.ps1", "Microsoft.PowerShellISE_profile.ps1"
+        } else {
+            $currentUserPath
+        }
+
+        # If the path doesn't have the expected format, build it manually
+        if (-not ($iseProfilePath -match "Microsoft\.PowerShellISE_profile\.ps1")) {
+            $profileDir = Split-Path -Parent $currentUserPath
+            $iseProfilePath = Join-Path $profileDir "Microsoft.PowerShellISE_profile.ps1"
+        }
 
         # Check if the directory exists, if not create it
         $iseProfileDir = Split-Path -Parent $iseProfilePath
@@ -783,15 +969,31 @@ try {
         return $true
     } catch {
         Write-ColorOutput "Failed to update PowerShell profiles: $_" "Red"
-        # Additional debug information
-        Write-ColorOutput "Profile variable: $PROFILE" "Yellow"
+        # Additional debug information using the preserved $originalProfile
+        if ($originalProfile -ne $null) {
+            try {
+                Write-ColorOutput "Profile variable: $originalProfile" "Yellow"
 
-        # Try to list all profile paths
-        Write-ColorOutput "Available profile paths:" "Yellow"
-        Write-ColorOutput "  CurrentUserCurrentHost: $($PROFILE.CurrentUserCurrentHost)" "Yellow"
-        Write-ColorOutput "  CurrentUserAllHosts: $($PROFILE.CurrentUserAllHosts)" "Yellow"
-        Write-ColorOutput "  AllUsersCurrentHost: $($PROFILE.AllUsersCurrentHost)" "Yellow"
-        Write-ColorOutput "  AllUsersAllHosts: $($PROFILE.AllUsersAllHosts)" "Yellow"
+                # Try to list all profile paths safely
+                Write-ColorOutput "Available profile paths:" "Yellow"
+                if ($originalProfile.PSObject.Properties.Name -contains "CurrentUserCurrentHost") {
+                    Write-ColorOutput "  CurrentUserCurrentHost: $($originalProfile.CurrentUserCurrentHost)" "Yellow"
+                }
+                if ($originalProfile.PSObject.Properties.Name -contains "CurrentUserAllHosts") {
+                    Write-ColorOutput "  CurrentUserAllHosts: $($originalProfile.CurrentUserAllHosts)" "Yellow"
+                }
+                if ($originalProfile.PSObject.Properties.Name -contains "AllUsersCurrentHost") {
+                    Write-ColorOutput "  AllUsersCurrentHost: $($originalProfile.AllUsersCurrentHost)" "Yellow"
+                }
+                if ($originalProfile.PSObject.Properties.Name -contains "AllUsersAllHosts") {
+                    Write-ColorOutput "  AllUsersAllHosts: $($originalProfile.AllUsersAllHosts)" "Yellow"
+                }
+            } catch {
+                Write-ColorOutput "Error accessing profile paths: $_" "Yellow"
+            }
+        } else {
+            Write-ColorOutput "Original profile variable is null" "Yellow"
+        }
 
         # Check PowerShell version
         Write-ColorOutput "PowerShell version: $($PSVersionTable.PSVersion)" "Yellow"
