@@ -59,7 +59,7 @@ If you encounter any issues:
 - [**Oh My Posh**](https://ohmyposh.dev/) - The powerful prompt theme engine
 - [**Nerd Fonts**](https://www.nerdfonts.com/) - Iconic font aggregator
 - [**JanDeDobbeleer**](https://github.com/JanDeDobbeleer) - Creator of Oh My Posh
-- [**wsflx**](https://github.com/wsflx) - Creator of this script
+- [**F00L1X**](https://github.com/F00L1X/wsflx) - Creator of this script
 
 ## 📜 License
 
