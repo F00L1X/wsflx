@@ -96,20 +96,47 @@ function Install-OhMyPosh {
             Write-ColorOutput "Installing Oh My Posh using winget..." "Yellow"
             Write-ColorOutput "This may take a minute, please wait..." "Yellow"
 
-            # Use Start-Process to run winget with a timeout to avoid hanging
-            $proc = Start-Process -FilePath "winget" -ArgumentList "install", "JanDeDobbeleer.OhMyPosh", "-e", "--accept-source-agreements", "--accept-package-agreements" -NoNewWindow -PassThru
+            # Use direct command execution to ensure output is visible
+            Write-ColorOutput "Running: winget install JanDeDobbeleer.OhMyPosh" "Cyan"
 
-            # Wait for the process with a timeout (1,5 minutes)
-            $waitResult = $proc.WaitForExit(90000)
+            # Set a script-level variable to track if we should try alternative methods
+            $script:useAlternativeMethod = $false
 
-            if (-not $waitResult) {
-                Write-ColorOutput "Winget installation is taking too long, attempting to terminate..." "Yellow"
-                try {
-                    $proc.Kill()
-                } catch {
-                    # Process might have exited between our check and kill attempt
+            # Run the installation in a job so we can apply a timeout
+            $job = Start-Job -ScriptBlock { winget install JanDeDobbeleer.OhMyPosh }
+
+            # Wait for the job with timeout and display output in real-time
+            $timeout = 90  # 90 seconds timeout
+            $timer = [System.Diagnostics.Stopwatch]::StartNew()
+
+            while (-not $job.HasMoreData -and $job.State -ne 'Completed' -and $timer.Elapsed.TotalSeconds -lt $timeout) {
+                Start-Sleep -Seconds 1
+            }
+
+            # Get any output so far
+            Receive-Job -Job $job
+
+            # Check if the job completed or timed out
+            if ($job.State -ne 'Completed' -and $timer.Elapsed.TotalSeconds -ge $timeout) {
+                Write-ColorOutput "Winget installation is taking too long, attempting to stop..." "Yellow"
+                Stop-Job -Job $job
+                Remove-Job -Job $job -Force
+                $script:useAlternativeMethod = $true
+            } else {
+                # Wait for job to complete and get all output
+                while ($job.State -eq 'Running' -and $timer.Elapsed.TotalSeconds -lt $timeout) {
+                    if ($job.HasMoreData) {
+                        Receive-Job -Job $job
+                    }
+                    Start-Sleep -Seconds 1
                 }
 
+                # Final receive of any remaining output
+                Receive-Job -Job $job
+                Remove-Job -Job $job
+            }
+
+            if ($script:useAlternativeMethod) {
                 Write-ColorOutput "Switching to direct installation method..." "Yellow"
                 # Fall through to the direct installation method
             } else {
@@ -121,78 +148,84 @@ function Install-OhMyPosh {
                     return $true
                 } else {
                     Write-ColorOutput "Oh My Posh not found after winget installation. Trying direct installation..." "Yellow"
+                    $script:useAlternativeMethod = $true
                 }
             }
         } catch {
             Write-ColorOutput "Failed to install Oh My Posh using winget: $_" "Red"
             Write-ColorOutput "Trying alternative installation method..." "Yellow"
+            $script:useAlternativeMethod = $true
         }
     } else {
         Write-ColorOutput "Winget not found. Using direct installation method..." "Yellow"
+        $script:useAlternativeMethod = $true
     }
 
-    # Alternative installation using direct installer
-    try {
-        Write-ColorOutput "Installing Oh My Posh using installer script..." "Yellow"
+    # If winget installation failed or wasn't attempted, use direct installer
+    if ($script:useAlternativeMethod) {
+        # Alternative installation using direct installer
+        try {
+            Write-ColorOutput "Installing Oh My Posh using installer script..." "Yellow"
 
-        Set-ExecutionPolicy Bypass -Scope Process -Force
-        Write-ColorOutput "Downloading installer..." "Yellow"
-        $installerContent = (New-Object System.Net.WebClient).DownloadString('https://ohmyposh.dev/install.ps1')
-        Write-ColorOutput "Running installer..." "Yellow"
-        Invoke-Expression $installerContent
+            Set-ExecutionPolicy Bypass -Scope Process -Force
+            Write-ColorOutput "Downloading installer..." "Yellow"
+            $installerContent = (New-Object System.Net.WebClient).DownloadString('https://ohmyposh.dev/install.ps1')
+            Write-ColorOutput "Running installer..." "Yellow"
+            Invoke-Expression $installerContent
 
-        # Refresh environment variables for current session
-        RefreshEnvironmentVariables
+            # Refresh environment variables for current session
+            RefreshEnvironmentVariables
 
-        if (Test-CommandExists "oh-my-posh") {
-            Write-ColorOutput "Oh My Posh installed successfully using installer script." "Green"
-            return $true
-        } else {
-            Write-ColorOutput "Failed to detect Oh My Posh after installation." "Red"
+            if (Test-CommandExists "oh-my-posh") {
+                Write-ColorOutput "Oh My Posh installed successfully using installer script." "Green"
+                return $true
+            } else {
+                Write-ColorOutput "Failed to detect Oh My Posh after installation." "Red"
 
-            # Last resort - try direct download and extraction
-            try {
-                Write-ColorOutput "Attempting manual installation..." "Yellow"
+                # Last resort - try direct download and extraction
+                try {
+                    Write-ColorOutput "Attempting manual installation..." "Yellow"
 
-                # Download latest release
-                $tempFolder = Join-Path $env:TEMP "OhMyPosh"
-                if (-not (Test-Path $tempFolder)) {
-                    New-Item -ItemType Directory -Path $tempFolder -Force | Out-Null
-                }
+                    # Download latest release
+                    $tempFolder = Join-Path $env:TEMP "OhMyPosh"
+                    if (-not (Test-Path $tempFolder)) {
+                        New-Item -ItemType Directory -Path $tempFolder -Force | Out-Null
+                    }
 
-                # Direct download the executable
-                $downloadUrl = "https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/posh-windows-amd64.exe"
-                $exePath = Join-Path $tempFolder "oh-my-posh.exe"
+                    # Direct download the executable
+                    $downloadUrl = "https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/posh-windows-amd64.exe"
+                    $exePath = Join-Path $tempFolder "oh-my-posh.exe"
 
-                (New-Object System.Net.WebClient).DownloadFile($downloadUrl, $exePath)
+                    (New-Object System.Net.WebClient).DownloadFile($downloadUrl, $exePath)
 
-                # Create a folder in the user's profile
-                $targetDir = Join-Path $env:USERPROFILE ".oh-my-posh"
-                if (-not (Test-Path $targetDir)) {
-                    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
-                }
+                    # Create a folder in the user's profile
+                    $targetDir = Join-Path $env:USERPROFILE ".oh-my-posh"
+                    if (-not (Test-Path $targetDir)) {
+                        New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+                    }
 
-                # Copy the file
-                Copy-Item -Path $exePath -Destination (Join-Path $targetDir "oh-my-posh.exe") -Force
+                    # Copy the file
+                    Copy-Item -Path $exePath -Destination (Join-Path $targetDir "oh-my-posh.exe") -Force
 
-                # Add to path
-                $env:Path = "$targetDir;$env:Path"
-                [Environment]::SetEnvironmentVariable("Path", $env:Path, "User")
+                    # Add to path
+                    $env:Path = "$targetDir;$env:Path"
+                    [Environment]::SetEnvironmentVariable("Path", $env:Path, "User")
 
-                if (Test-Path (Join-Path $targetDir "oh-my-posh.exe")) {
-                    Write-ColorOutput "Oh My Posh installed manually to $targetDir" "Green"
-                    return $true
-                } else {
+                    if (Test-Path (Join-Path $targetDir "oh-my-posh.exe")) {
+                        Write-ColorOutput "Oh My Posh installed manually to $targetDir" "Green"
+                        return $true
+                    } else {
+                        return $false
+                    }
+                } catch {
+                    Write-ColorOutput "Manual installation failed: $_" "Red"
                     return $false
                 }
-            } catch {
-                Write-ColorOutput "Manual installation failed: $_" "Red"
-                return $false
             }
+        } catch {
+            Write-ColorOutput "Failed to install Oh My Posh: $_" "Red"
+            return $false
         }
-    } catch {
-        Write-ColorOutput "Failed to install Oh My Posh: $_" "Red"
-        return $false
     }
 }
 
