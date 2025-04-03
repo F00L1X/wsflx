@@ -422,8 +422,8 @@ function Update-PowerShellProfile {
             }
         }
 
-            # For PowerShell ISE, add a conditional initialization that only runs in regular PowerShell
-            $newOhMyPoshConfig = @"
+        # Always use the ISE-aware Oh My Posh configuration
+        $newOhMyPoshConfig = @"
 # Oh My Posh Theme - Only initialize in compatible terminals, not in ISE
 try {
     # Check if running in PowerShell ISE
@@ -458,41 +458,38 @@ try {
                 $existingTheme = $matches[1]
                 Write-ColorOutput "Found existing Oh My Posh configuration with theme: $existingTheme" "Cyan"
 
-                # Check if we need to update the theme
-                if ($existingTheme -ne $THEME -or $inPowerShellISE) {
-                    if ($existingTheme -ne $THEME) {
-                        Write-ColorOutput "Updating Oh My Posh theme from '$existingTheme' to '$THEME'..." "Yellow"
-                    }
-
-                    # Replace the existing Oh My Posh configuration with the new one
-                    $updatedContent = $profileContent
-
-                    # First try to update the entire Oh My Posh section
-                    $sectionPattern = "(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)"
-                    if ($profileContent -match $sectionPattern) {
-                        $updatedContent = $profileContent -replace $sectionPattern, "# Oh My Posh Theme`n$newOhMyPoshConfig"
-                    }
-                    # If that didn't work, try to update just the init line
-                    elseif ($updatedContent -eq $profileContent) {
-                        $updatedContent = $profileContent -replace $ohMyPoshPattern, ($newOhMyPoshConfig -replace "# Oh My Posh Theme`n", "")
-                    }
-
-                    # If both previous attempts failed, append the new config
-                    if ($updatedContent -eq $profileContent) {
-                        Write-ColorOutput "Could not update existing Oh My Posh configuration, will append new one" "Yellow"
-                        $updatedContent = $profileContent + "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
-                    }
-
-                    Set-Content -Path $profilePath -Value $updatedContent -Force
-                    Write-ColorOutput "Oh My Posh theme updated in PowerShell profile." "Green"
-                } else {
-                    Write-ColorOutput "Oh My Posh already configured with theme '$THEME'. No changes needed." "Green"
+                # Always update the configuration to include ISE check
+                Write-ColorOutput "Updating Oh My Posh configuration to include ISE compatibility..." "Yellow"
+                if ($existingTheme -ne $THEME) {
+                    Write-ColorOutput "Also updating theme from '$existingTheme' to '$THEME'..." "Yellow"
                 }
+
+                # Replace the existing Oh My Posh configuration with the new one
+                $updatedContent = $profileContent
+
+                # First try to update the entire Oh My Posh section
+                $sectionPattern = "(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)"
+                if ($profileContent -match $sectionPattern) {
+                    $updatedContent = $profileContent -replace $sectionPattern, "# Oh My Posh Theme`n$newOhMyPoshConfig"
+                }
+                # If that didn't work, try to update just the init line
+                elseif ($updatedContent -eq $profileContent) {
+                    $updatedContent = $profileContent -replace $ohMyPoshPattern, ($newOhMyPoshConfig -replace "# Oh My Posh Theme.*\r?\n", "")
+                }
+
+                # If both previous attempts failed, append the new config
+                if ($updatedContent -eq $profileContent) {
+                    Write-ColorOutput "Could not update existing Oh My Posh configuration, will append new one" "Yellow"
+                    $updatedContent = $profileContent + "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
+                }
+
+                Set-Content -Path $profilePath -Value $updatedContent -Force
+                Write-ColorOutput "Oh My Posh configuration updated with ISE compatibility." "Green"
             } elseif ($profileContent -match "oh-my-posh init pwsh") {
                 # Found Oh My Posh but couldn't parse theme, more generic pattern
                 $ohMyPoshConfigured = $true
                 Write-ColorOutput "Found existing Oh My Posh configuration but couldn't detect theme." "Yellow"
-                Write-ColorOutput "Updating to use theme: $THEME" "Yellow"
+                Write-ColorOutput "Updating configuration with ISE compatibility..." "Yellow"
 
                 # Try to replace the line with a more generic pattern
                 $genericPattern = '(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)|oh-my-posh\s+init\s+pwsh.*\|\s+Invoke-Expression'
@@ -500,11 +497,11 @@ try {
 
                 if ($updatedContent -ne $profileContent) {
                     Set-Content -Path $profilePath -Value $updatedContent -Force
-                    Write-ColorOutput "Oh My Posh configuration updated in PowerShell profile." "Green"
+                    Write-ColorOutput "Oh My Posh configuration updated with ISE compatibility." "Green"
                 } else {
                     # Couldn't replace with regex, just add the new config
                     Add-Content -Path $profilePath -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n" -Force
-                    Write-ColorOutput "Added new Oh My Posh configuration to PowerShell profile." "Green"
+                    Write-ColorOutput "Added new Oh My Posh configuration with ISE compatibility." "Green"
                 }
             } else {
                 # No Oh My Posh config found
@@ -525,7 +522,7 @@ try {
             }
 
             Add-Content -Path $profilePath -Value $newContent -Force
-            Write-ColorOutput "Oh My Posh configured in PowerShell profile with theme: $THEME" "Green"
+            Write-ColorOutput "Oh My Posh configured in PowerShell profile with theme: $THEME and ISE compatibility." "Green"
         }
 
         return $true
