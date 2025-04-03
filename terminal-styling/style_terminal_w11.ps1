@@ -449,7 +449,125 @@ Write-Host "ISE-compatible theme activated based on $ThemeName. Oh My Posh featu
     return $promptFunction
 }
 
-# Update the function that configures PowerShell profile to include the ISE-specific profile
+# Function to update profile content safely without regex issues
+function Update-ProfileContent {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ProfilePath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$NewConfiguration,
+
+        [Parameter(Mandatory=$false)]
+        [string]$ThemeName = $THEME
+    )
+
+    try {
+        # Create a backup of the profile first
+        $backupPath = "$ProfilePath.backup"
+        Write-ColorOutput "Creating backup of profile at $backupPath" "Yellow"
+        Copy-Item -Path $ProfilePath -Destination $backupPath -Force
+
+        # Read the profile line by line instead of as one big string
+        $profileLines = Get-Content -Path $ProfilePath -ErrorAction Stop
+
+        # Check if file is empty
+        if ($null -eq $profileLines -or $profileLines.Count -eq 0) {
+            Write-ColorOutput "Profile is empty, writing new configuration" "Yellow"
+            Set-Content -Path $ProfilePath -Value "# Oh My Posh Theme`n$NewConfiguration" -Force
+            return $true
+        }
+
+        # Process the file
+        $newContent = New-Object System.Collections.ArrayList
+        $inOhMyPoshSection = $false
+        $ohMyPoshSectionFound = $false
+        $skipLinesUntil = -1
+
+        for ($i = 0; $i -lt $profileLines.Count; $i++) {
+            $line = $profileLines[$i]
+
+            # Check if we should skip this line (part of an existing Oh My Posh section)
+            if ($i -le $skipLinesUntil) {
+                continue
+            }
+
+            # Look for the start of an Oh My Posh configuration section
+            if ($line -match "^#\s*Oh My Posh Theme" -or
+                $line -match "oh-my-posh init pwsh") {
+
+                $ohMyPoshSectionFound = $true
+                $inOhMyPoshSection = $true
+
+                # Find the end of the Oh My Posh section
+                $sectionEnd = $i
+                for ($j = $i + 1; $j -lt $profileLines.Count; $j++) {
+                    if ($profileLines[$j] -match "^#" -and $profileLines[$j] -notmatch "Oh My Posh") {
+                        $sectionEnd = $j - 1
+                        break
+                    }
+                    if ($j -eq $profileLines.Count - 1) {
+                        $sectionEnd = $j
+                    }
+                }
+
+                # Skip all lines in the existing Oh My Posh section
+                $skipLinesUntil = $sectionEnd
+
+                # Add our new configuration
+                [void]$newContent.Add("# Oh My Posh Theme")
+                foreach ($configLine in $NewConfiguration -split "`n") {
+                    [void]$newContent.Add($configLine)
+                }
+
+                # Add a blank line after the section
+                [void]$newContent.Add("")
+
+                $inOhMyPoshSection = $false
+            }
+            else {
+                # Add the line as-is
+                [void]$newContent.Add($line)
+            }
+        }
+
+        # If no Oh My Posh section was found, add it at the end
+        if (-not $ohMyPoshSectionFound) {
+            Write-ColorOutput "No existing Oh My Posh configuration found, adding new one" "Yellow"
+            [void]$newContent.Add("")
+            [void]$newContent.Add("# Oh My Posh Theme")
+            foreach ($configLine in $NewConfiguration -split "`n") {
+                [void]$newContent.Add($configLine)
+            }
+            [void]$newContent.Add("")
+        }
+
+        # Write the updated content back to the file
+        $newContent | Set-Content -Path $ProfilePath -Force
+
+        Write-ColorOutput "Profile updated successfully" "Green"
+        return $true
+    }
+    catch {
+        Write-ColorOutput "Error updating profile: $_" "Red"
+
+        # Try to restore from backup if we made one
+        if (Test-Path $backupPath) {
+            Write-ColorOutput "Attempting to restore profile from backup..." "Yellow"
+            try {
+                Copy-Item -Path $backupPath -Destination $ProfilePath -Force
+                Write-ColorOutput "Profile restored from backup" "Green"
+            }
+            catch {
+                Write-ColorOutput "Failed to restore profile: $_" "Red"
+            }
+        }
+
+        return $false
+    }
+}
+
+# Update the Update-PowerShellProfile function to use the new method
 function Update-PowerShellProfile {
     Write-ColorOutput "Configuring PowerShell profile..." "Yellow"
 
@@ -541,23 +659,10 @@ function Update-PowerShellProfile {
         if (-not (Test-Path $profilePath)) {
             Write-ColorOutput "Creating new profile file: $profilePath" "Yellow"
             New-Item -ItemType File -Path $profilePath -Force | Out-Null
-            $profileContent = ""
-        } else {
-            # Read existing profile content with extra error handling
-            try {
-                $profileContent = Get-Content -Path $profilePath -Raw -ErrorAction Stop
-                if ([string]::IsNullOrWhiteSpace($profileContent)) {
-                    Write-ColorOutput "Profile exists but is empty." "Yellow"
-                    $profileContent = ""
-                }
-            } catch {
-                Write-ColorOutput "Error reading profile (will create empty profile): $_" "Yellow"
-                $profileContent = ""
-            }
         }
 
-        # Always use the ISE-aware Oh My Posh configuration
-        $newOhMyPoshConfig = @'
+        # Configuration for Oh My Posh
+        $ohMyPoshConfig = @'
 # Oh My Posh Theme - Only initialize in compatible terminals, not in ISE
 try {
     # Check if running in PowerShell ISE
@@ -582,83 +687,25 @@ try {
 }
 '@ -replace 'THEME_NAME', $THEME
 
-        $ohMyPoshConfigured = $false
+        # Try to detect existing theme
         $existingTheme = $null
-
-        # Try to detect existing Oh My Posh configuration and extract theme
-        if (-not [string]::IsNullOrWhiteSpace($profileContent)) {
-            # Look for the Oh My Posh init line with regex to extract theme
-            $ohMyPoshPattern = 'oh-my-posh\s+init\s+pwsh\s+--config\s+[`"]?\$env:POSH_THEMES_PATH\\([^\.]+)\.omp\.json[`"]?\s+\|\s+Invoke-Expression'
-            if ($profileContent -match $ohMyPoshPattern) {
-                $ohMyPoshConfigured = $true
+        if (Test-Path $profilePath) {
+            $profileContent = Get-Content -Path $profilePath -Raw -ErrorAction SilentlyContinue
+            if ($profileContent -match 'oh-my-posh\s+init\s+pwsh\s+--config\s+[`"]?\$env:POSH_THEMES_PATH\\([^\.]+)\.omp\.json[`"]?') {
                 $existingTheme = $matches[1]
                 Write-ColorOutput "Found existing Oh My Posh configuration with theme: $existingTheme" "Cyan"
-
-                # Always update the configuration to include ISE check
-                Write-ColorOutput "Updating Oh My Posh configuration to include ISE compatibility..." "Yellow"
-                if ($existingTheme -ne $THEME) {
-                    Write-ColorOutput "Also updating theme from '$existingTheme' to '$THEME'..." "Yellow"
-                }
-
-                # Replace the existing Oh My Posh configuration with the new one
-                $updatedContent = $profileContent
-
-                # First try to update the entire Oh My Posh section
-                $sectionPattern = "(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)"
-                if ($profileContent -match $sectionPattern) {
-                    $updatedContent = $profileContent -replace $sectionPattern, "# Oh My Posh Theme`n$newOhMyPoshConfig"
-                }
-                # If that didn't work, try to update just the init line
-                elseif ($updatedContent -eq $profileContent) {
-                    $updatedContent = $profileContent -replace $ohMyPoshPattern, ($newOhMyPoshConfig -replace "# Oh My Posh Theme.*\r?\n", "")
-                }
-
-                # If both previous attempts failed, append the new config
-                if ($updatedContent -eq $profileContent) {
-                    Write-ColorOutput "Could not update existing Oh My Posh configuration, will append new one" "Yellow"
-                    $updatedContent = $profileContent + "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
-                }
-
-                Set-Content -Path $profilePath -Value $updatedContent -Force
-                Write-ColorOutput "Oh My Posh configuration updated with ISE compatibility." "Green"
-            } elseif ($profileContent -match "oh-my-posh init pwsh") {
-                # Found Oh My Posh but couldn't parse theme, more generic pattern
-                $ohMyPoshConfigured = $true
-                Write-ColorOutput "Found existing Oh My Posh configuration but couldn't detect theme." "Yellow"
-                Write-ColorOutput "Updating configuration with ISE compatibility..." "Yellow"
-
-                # Try to replace the line with a more generic pattern
-                $genericPattern = '(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)|oh-my-posh\s+init\s+pwsh.*\|\s+Invoke-Expression'
-                $updatedContent = $profileContent -replace $genericPattern, "# Oh My Posh Theme`n$newOhMyPoshConfig"
-
-                if ($updatedContent -ne $profileContent) {
-                    Set-Content -Path $profilePath -Value $updatedContent -Force
-                    Write-ColorOutput "Oh My Posh configuration updated with ISE compatibility." "Green"
-                } else {
-                    # Couldn't replace with regex, just add the new config
-                    Add-Content -Path $profilePath -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n" -Force
-                    Write-ColorOutput "Added new Oh My Posh configuration with ISE compatibility." "Green"
-                }
-            } else {
-                # No Oh My Posh config found
-                $ohMyPoshConfigured = $false
             }
-        } else {
-            # Profile is empty
-            Write-ColorOutput "Profile is empty, will add new Oh My Posh configuration." "Yellow"
-            $ohMyPoshConfigured = $false
         }
 
-        # If Oh My Posh is not configured yet, add it
-        if (-not $ohMyPoshConfigured) {
-            $newContent = if ([string]::IsNullOrWhiteSpace($profileContent)) {
-                "# Oh My Posh Theme`n$newOhMyPoshConfig`n"
-            } else {
-                "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
-            }
+        # Update the regular profile using our new safe method
+        Write-ColorOutput "Updating Oh My Posh configuration to include ISE compatibility..." "Yellow"
+        if ($existingTheme -ne $THEME -and $null -ne $existingTheme) {
+            Write-ColorOutput "Also updating theme from '$existingTheme' to '$THEME'..." "Yellow"
+        }
 
-            Add-Content -Path $profilePath -Value $newContent -Force
-            Write-ColorOutput "Oh My Posh configured in PowerShell profile with theme: $THEME and ISE compatibility." "Green"
+        $regularProfileUpdated = Update-ProfileContent -ProfilePath $profilePath -NewConfiguration $ohMyPoshConfig
+        if (-not $regularProfileUpdated) {
+            throw "Failed to update regular PowerShell profile"
         }
 
         # Now also configure the ISE-specific profile with a simplified theme
@@ -677,21 +724,48 @@ try {
         # Read existing ISE profile content
         if (Test-Path $iseProfilePath) {
             Write-ColorOutput "Updating existing ISE profile with simplified theme..." "Yellow"
-            $iseProfileContent = Get-Content -Path $iseProfilePath -Raw -ErrorAction SilentlyContinue
 
-            # Check if there's already a prompt function
-            if ($iseProfileContent -match "function\s+global:prompt\s*\{") {
-                # Replace existing prompt function
-                $updatedIseContent = [regex]::Replace($iseProfileContent, "function\s+global:prompt\s*\{.*?\n\}", $iseThemeFunction, [System.Text.RegularExpressions.RegexOptions]::Singleline)
-                if ($updatedIseContent -eq $iseProfileContent) {
-                    # If replacement failed, just append
-                    $updatedIseContent = $iseProfileContent + "`n# Theme-compatible PowerShell ISE prompt`n$iseThemeFunction`n"
+            # Get the ISE profile content line by line
+            $iseProfileLines = Get-Content -Path $iseProfilePath -ErrorAction SilentlyContinue
+
+            # Create new content excluding any existing prompt function
+            $newIseContent = New-Object System.Collections.ArrayList
+            $inPromptFunction = $false
+            $promptFunctionFound = $false
+
+            if ($null -ne $iseProfileLines -and $iseProfileLines.Count -gt 0) {
+                for ($i = 0; $i -lt $iseProfileLines.Count; $i++) {
+                    $line = $iseProfileLines[$i]
+
+                    # Check for the start of a prompt function
+                    if ($line -match "function\s+global:prompt\s*\{") {
+                        $inPromptFunction = $true
+                        $promptFunctionFound = $true
+                        continue
+                    }
+
+                    # Check for the end of a function
+                    if ($inPromptFunction -and $line -match "^\s*\}\s*$") {
+                        $inPromptFunction = $false
+                        continue
+                    }
+
+                    # Add the line if not in a prompt function
+                    if (-not $inPromptFunction) {
+                        [void]$newIseContent.Add($line)
+                    }
                 }
-                Set-Content -Path $iseProfilePath -Value $updatedIseContent -Force
-            } else {
-                # No existing prompt, just append
-                Add-Content -Path $iseProfilePath -Value "`n# Theme-compatible PowerShell ISE prompt`n$iseThemeFunction`n" -Force
             }
+
+            # Add the new theme function
+            [void]$newIseContent.Add("")
+            [void]$newIseContent.Add("# Theme-compatible PowerShell ISE prompt")
+            foreach ($themeLine in $iseThemeFunction -split "`n") {
+                [void]$newIseContent.Add($themeLine)
+            }
+
+            # Write the updated content back to the file
+            $newIseContent | Set-Content -Path $iseProfilePath -Force
         } else {
             # Create new ISE profile
             Write-ColorOutput "Creating new ISE profile with simplified theme..." "Yellow"
