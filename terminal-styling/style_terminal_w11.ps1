@@ -5,7 +5,7 @@
 # IMPORTANT: This script requires administrative privileges
 
 $ErrorActionPreference = "Stop"
-
+$THEME = "atomicBit" # or craver or anything, refer to: https://ohmyposh.dev/docs/themes
 # Check for administrative privileges
 function Test-Administrator {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -284,7 +284,7 @@ function Update-PowerShellProfile {
 
     # Check if Oh My Posh is already configured in the profile
     $profileContent = Get-Content -Path $PROFILE -ErrorAction SilentlyContinue
-    $ohMyPoshConfig = "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\craver.omp.json`" | Invoke-Expression"
+    $ohMyPoshConfig = "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
 
     if ($profileContent -match "oh-my-posh init pwsh") {
         Write-ColorOutput "Oh My Posh already configured in PowerShell profile." "Cyan"
