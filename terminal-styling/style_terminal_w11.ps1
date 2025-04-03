@@ -335,6 +335,121 @@ function RefreshEnvironmentVariables {
     }
 }
 
+# Function to create a simplified ISE-compatible prompt theme
+function Get-SimplifiedISETheme {
+    param(
+        [Parameter(Mandatory=$false)]
+        [string]$ThemeName = $THEME
+    )
+
+    # Map Oh My Posh theme names to simple color schemes for ISE
+    $themeColorMap = @{
+        "atomicBit" = @{
+            "UserColor" = "Cyan"
+            "HostColor" = "Green"
+            "PathColor" = "Yellow"
+            "GitColor" = "Magenta"
+            "ErrorColor" = "Red"
+            "SuccessColor" = "Green"
+            "PromptChar" = ">"
+        }
+        "craver" = @{
+            "UserColor" = "Magenta"
+            "HostColor" = "Blue"
+            "PathColor" = "Yellow"
+            "GitColor" = "Cyan"
+            "ErrorColor" = "Red"
+            "SuccessColor" = "Green"
+            "PromptChar" = "λ"
+        }
+        "default" = @{
+            "UserColor" = "Cyan"
+            "HostColor" = "Green"
+            "PathColor" = "Yellow"
+            "GitColor" = "Blue"
+            "ErrorColor" = "Red"
+            "SuccessColor" = "Green"
+            "PromptChar" = ">"
+        }
+    }
+
+    # Choose color scheme based on theme or fall back to default
+    $colors = $themeColorMap[$ThemeName]
+    if (-not $colors) {
+        $colors = $themeColorMap["default"]
+    }
+
+    # Create the simplified prompt function for ISE
+    $promptFunction = @"
+function global:prompt {
+    # Get the execution status of the last command
+    `$lastExitCode = `$LASTEXITCODE
+    `$lastCommandSuccess = `$?
+
+    # Current user and hostname
+    `$currentUser = [System.Environment]::UserName
+    `$computerName = [System.Environment]::MachineName
+
+    # Get current directory with home folder replacement
+    `$currentPath = `$pwd.Path
+    if (`$currentPath.StartsWith(`$HOME)) {
+        `$currentPath = "~" + `$currentPath.Substring(`$HOME.Length)
+    }
+
+    # Git information (if available)
+    `$gitBranch = ""
+    try {
+        `$gitCommand = Get-Command git -ErrorAction SilentlyContinue
+        if (`$gitCommand) {
+            `$gitBranch = git branch --show-current 2>`$null
+            if (`$gitBranch) {
+                `$gitBranch = " [" + `$gitBranch + "]"
+            }
+        }
+    } catch {
+        # Silently fail if git isn't available
+    }
+
+    # Build the prompt
+    `$promptText = ""
+
+    # Status indicator character and color
+    `$statusChar = if (`$lastCommandSuccess) { "$($colors.PromptChar)" } else { "!" }
+    `$statusColor = if (`$lastCommandSuccess) { "$($colors.SuccessColor)" } else { "$($colors.ErrorColor)" }
+
+    # Build the prompt segments with colors
+    `$promptText += Write-Host "`$(`$currentUser)@`$(`$computerName)" -NoNewline -ForegroundColor $($colors.UserColor)
+    `$promptText += Write-Host " [" -NoNewline
+    `$promptText += Write-Host "`$(`$currentPath)" -NoNewline -ForegroundColor $($colors.PathColor)
+    `$promptText += Write-Host "]" -NoNewline
+
+    if (`$gitBranch) {
+        `$promptText += Write-Host "`$(`$gitBranch)" -NoNewline -ForegroundColor $($colors.GitColor)
+    }
+
+    # Check for admin privileges
+    `$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole] "Administrator")
+    if (`$isAdmin) {
+        `$promptText += Write-Host " (Admin)" -NoNewline -ForegroundColor $($colors.ErrorColor)
+    }
+
+    # Final prompt character with proper color
+    `$promptText += Write-Host "`n`$(`$statusChar) " -NoNewline -ForegroundColor `$statusColor
+
+    # Reset LASTEXITCODE to its previous value
+    `$global:LASTEXITCODE = `$lastExitCode
+
+    return " "
+}
+
+# Show a message once to indicate the simplified theme is active
+Write-Host "ISE-compatible theme activated based on $ThemeName. Oh My Posh features are limited in ISE." -ForegroundColor Cyan
+"@
+
+    return $promptFunction
+}
+
+# Update the function that configures PowerShell profile to include the ISE-specific profile
 function Update-PowerShellProfile {
     Write-ColorOutput "Configuring PowerShell profile..." "Yellow"
 
@@ -362,36 +477,55 @@ function Update-PowerShellProfile {
             Write-ColorOutput "Note: PowerShell ISE does not support ANSI color codes used by Oh My Posh." "Yellow"
         }
 
-        # Determine the correct profile path based on the environment
-        $profilePath = $PROFILE
+        # Determine the correct profile path dynamically
         $profileType = "Default PowerShell profile"
 
-        # Check if we're running in Windows Terminal
-        $inWindowsTerminal = $env:WT_SESSION -or $env:WT_PROFILE_ID
-        if ($inWindowsTerminal) {
-            Write-ColorOutput "Detected Windows Terminal environment." "Cyan"
-            $profileType = "Windows Terminal PowerShell profile"
+        # Get all possible profiles for the current user
+        $possibleProfiles = @(
+            [PSCustomObject]@{ Path = $PROFILE.CurrentUserCurrentHost; Type = "CurrentUserCurrentHost" },
+            [PSCustomObject]@{ Path = $PROFILE.CurrentUserAllHosts; Type = "CurrentUserAllHosts" }
+        )
 
-            # For Windows Terminal, we might need to use a different profile path
-            # Get potential profile paths for Windows Terminal
-            $potentialProfiles = @(
-                $PROFILE,
-                $PROFILE.CurrentUserCurrentHost,
-                $PROFILE.CurrentUserAllHosts,
-                $PROFILE.AllUsersCurrentHost,
-                $PROFILE.AllUsersAllHosts
-            ) | Select-Object -Unique
+        # Use this to look for non-ISE specific profiles
+        $regularProfilesPattern = '\\Microsoft\.PowerShell_profile\.ps1$|\\profile\.ps1$'
+        $iseProfilePattern = '\\Microsoft\.PowerShellISE_profile\.ps1$'
 
-            # Find the first existing profile or create one
-            $existingProfile = $potentialProfiles | Where-Object { Test-Path $_ } | Select-Object -First 1
-            if ($existingProfile) {
-                $profilePath = $existingProfile
-                Write-ColorOutput "Using existing profile: $profilePath" "Cyan"
-            } else {
-                # Default to CurrentUserCurrentHost if none exists
-                $profilePath = $PROFILE.CurrentUserCurrentHost
+        # Filter out ISE-specific profiles for regular profile update
+        $validProfiles = $possibleProfiles | Where-Object {
+            $_.Path -match $regularProfilesPattern -and
+            $_.Path -notmatch $iseProfilePattern
+        }
+
+        # Choose the best profile to use
+        $profilePath = $null
+
+        # First try to find an existing regular profile
+        $existingProfile = $validProfiles | Where-Object { Test-Path $_.Path } | Select-Object -First 1
+        if ($existingProfile) {
+            $profilePath = $existingProfile.Path
+            $profileType = "Existing $($existingProfile.Type) profile"
+            Write-ColorOutput "Found existing profile: $profilePath" "Cyan"
+        } else {
+            # Default to CurrentUserCurrentHost if none exists - ensuring it's not an ISE profile
+            $defaultProfile = $validProfiles | Where-Object { $_.Type -eq "CurrentUserCurrentHost" } | Select-Object -First 1
+            if ($defaultProfile) {
+                $profilePath = $defaultProfile.Path
+                $profileType = "New CurrentUserCurrentHost profile"
                 Write-ColorOutput "No existing profile found, will create: $profilePath" "Yellow"
+            } else {
+                throw "Could not determine a suitable PowerShell profile path"
             }
+        }
+
+        # Double-check we're not modifying an ISE profile
+        if ($profilePath -match $iseProfilePattern) {
+            Write-ColorOutput "Warning: Selected profile appears to be an ISE-specific profile: $profilePath" "Yellow"
+            Write-ColorOutput "Switching to a regular PowerShell profile instead." "Yellow"
+
+            # Force use of the standard CurrentUserCurrentHost profile
+            $standardPath = $PROFILE.CurrentUserCurrentHost -replace "Microsoft\.PowerShellISE_profile\.ps1", "Microsoft.PowerShell_profile.ps1"
+            $profilePath = $standardPath
+            $profileType = "Standard PowerShell profile"
         }
 
         Write-ColorOutput "Using $profileType at: $profilePath" "Cyan"
@@ -439,7 +573,7 @@ try {
         oh-my-posh init pwsh --config "`$env:POSH_THEMES_PATH\$($THEME).omp.json" | Invoke-Expression
     } else {
         # PowerShell ISE doesn't support ANSI color codes used by Oh My Posh
-        Write-Host "Oh My Posh is disabled in PowerShell ISE" -ForegroundColor Cyan
+        Write-Host "Oh My Posh is disabled in PowerShell ISE, using simplified theme instead" -ForegroundColor Cyan
     }
 } catch {
     Write-Host "Oh My Posh initialization failed: `$_" -ForegroundColor Yellow
@@ -525,9 +659,54 @@ try {
             Write-ColorOutput "Oh My Posh configured in PowerShell profile with theme: $THEME and ISE compatibility." "Green"
         }
 
+        # Now also configure the ISE-specific profile with a simplified theme
+        $iseProfilePath = $PROFILE.CurrentUserCurrentHost -replace "Microsoft\.PowerShell_profile\.ps1", "Microsoft.PowerShellISE_profile.ps1"
+
+        # Check if the directory exists, if not create it
+        $iseProfileDir = Split-Path -Parent $iseProfilePath
+        if (-not (Test-Path $iseProfileDir)) {
+            Write-ColorOutput "Creating ISE profile directory: $iseProfileDir" "Yellow"
+            New-Item -ItemType Directory -Path $iseProfileDir -Force | Out-Null
+        }
+
+        # Create a simplified theme for ISE
+        $iseThemeFunction = Get-SimplifiedISETheme -ThemeName $THEME
+
+        # Read existing ISE profile content
+        if (Test-Path $iseProfilePath) {
+            Write-ColorOutput "Updating existing ISE profile with simplified theme..." "Yellow"
+            $iseProfileContent = Get-Content -Path $iseProfilePath -Raw -ErrorAction SilentlyContinue
+
+            # Check if there's already a prompt function
+            if ($iseProfileContent -match "function\s+global:prompt\s*\{") {
+                # Replace existing prompt function
+                $updatedIseContent = [regex]::Replace($iseProfileContent, "function\s+global:prompt\s*\{.*?\n\}", $iseThemeFunction, [System.Text.RegularExpressions.RegexOptions]::Singleline)
+                if ($updatedIseContent -eq $iseProfileContent) {
+                    # If replacement failed, just append
+                    $updatedIseContent = $iseProfileContent + "`n# Theme-compatible PowerShell ISE prompt`n$iseThemeFunction`n"
+                }
+                Set-Content -Path $iseProfilePath -Value $updatedIseContent -Force
+            } else {
+                # No existing prompt, just append
+                Add-Content -Path $iseProfilePath -Value "`n# Theme-compatible PowerShell ISE prompt`n$iseThemeFunction`n" -Force
+            }
+        } else {
+            # Create new ISE profile
+            Write-ColorOutput "Creating new ISE profile with simplified theme..." "Yellow"
+            $newIseContent = "# PowerShell ISE Profile - Theme-compatible prompt`n$iseThemeFunction`n"
+            Set-Content -Path $iseProfilePath -Value $newIseContent -Force
+        }
+
+        Write-ColorOutput "ISE profile configured with simplified theme at: $iseProfilePath" "Green"
+
+        # Log what we modified
+        Write-ColorOutput "Profiles updated:" "Cyan"
+        Write-ColorOutput "  - Regular profile: $profilePath" "Cyan"
+        Write-ColorOutput "  - ISE profile with simplified theme: $iseProfilePath" "Cyan"
+
         return $true
     } catch {
-        Write-ColorOutput "Failed to update PowerShell profile: $_" "Red"
+        Write-ColorOutput "Failed to update PowerShell profiles: $_" "Red"
         # Additional debug information
         Write-ColorOutput "Profile variable: $PROFILE" "Yellow"
 
