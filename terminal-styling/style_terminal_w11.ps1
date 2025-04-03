@@ -567,6 +567,106 @@ function Update-ProfileContent {
     }
 }
 
+function New-CleanProfile {
+    param(
+        [Parameter(Mandatory=$true)]
+        [string]$ProfilePath,
+
+        [Parameter(Mandatory=$true)]
+        [string]$NewConfiguration,
+
+        [Parameter(Mandatory=$false)]
+        [switch]$ForceNewProfile
+    )
+
+    try {
+        # Check if profile exists
+        if (Test-Path $ProfilePath) {
+            # Read the profile to check for corruption
+            $profileContent = Get-Content -Path $ProfilePath -Raw -ErrorAction Stop
+
+            # Check for profile corruption (multiple Oh My Posh configurations)
+            $ohMyPoshCount = 0
+            if ($profileContent -match "oh-my-posh init pwsh") {
+                # Count occurrences of "oh-my-posh init pwsh"
+                $ohMyPoshCount = ([regex]::Matches($profileContent, "oh-my-posh init pwsh")).Count
+
+                if ($ohMyPoshCount -gt 1) {
+                    Write-ColorOutput "Detected corrupted profile with $ohMyPoshCount Oh My Posh configurations" "Yellow"
+                }
+            }
+
+            # If profile exists, always back it up and create a new one
+            # Determine backup name with incremental numbering
+            $profileDir = Split-Path -Parent $ProfilePath
+            $profileName = Split-Path -Leaf $ProfilePath
+            $nameWithoutExt = [System.IO.Path]::GetFileNameWithoutExtension($profileName)
+            $extension = [System.IO.Path]::GetExtension($profileName)
+
+            # Find existing backups to determine next number
+            $existingBackups = Get-ChildItem -Path $profileDir -Filter "$nameWithoutExt.backup*.ps1" -ErrorAction SilentlyContinue
+            $maxNumber = 0
+
+            if ($existingBackups) {
+                foreach ($backup in $existingBackups) {
+                    if ($backup.Name -match "\.backup(\d+)\.ps1$") {
+                        $backupNumber = [int]$Matches[1]
+                        if ($backupNumber -gt $maxNumber) {
+                            $maxNumber = $backupNumber
+                        }
+                    }
+                }
+            }
+
+            # Create new backup name with incremented number
+            $newNumber = $maxNumber + 1
+            $backupPath = Join-Path $profileDir "$nameWithoutExt.backup$newNumber$extension"
+
+            # Backup the old profile
+            Write-ColorOutput "Backing up existing profile to: $backupPath" "Yellow"
+            Copy-Item -Path $ProfilePath -Destination $backupPath -Force
+
+            # Create a new clean profile
+            $newProfileContent = @"
+# PowerShell Profile
+# Created by Oh My Posh terminal styling script on $(Get-Date)
+
+# Oh My Posh Theme
+$NewConfiguration
+"@
+
+            # Write the new profile
+            Set-Content -Path $ProfilePath -Value $newProfileContent -Force
+            Write-ColorOutput "Created new clean profile at: $ProfilePath" "Green"
+            Write-ColorOutput "Previous profile content is preserved in: $backupPath" "Cyan"
+
+            return $true
+        } else {
+            # Profile doesn't exist, create a new one
+            $profileDir = Split-Path -Parent $ProfilePath
+            if (-not (Test-Path $profileDir)) {
+                New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
+            }
+
+            $newProfileContent = @"
+# PowerShell Profile
+# Created by Oh My Posh terminal styling script on $(Get-Date)
+
+# Oh My Posh Theme
+$NewConfiguration
+"@
+
+            Set-Content -Path $ProfilePath -Value $newProfileContent -Force
+            Write-ColorOutput "Created new profile at: $ProfilePath" "Green"
+
+            return $true
+        }
+    } catch {
+        Write-ColorOutput "Error handling profile: $_" "Red"
+        return $false
+    }
+}
+
 # Update the Update-PowerShellProfile function to use the new method
 function Update-PowerShellProfile {
     Write-ColorOutput "Configuring PowerShell profile..." "Yellow"
@@ -847,12 +947,8 @@ try {
             $isInISE = $true
         }
     }
-
     if (-not $isInISE) {
-        # Only initialize Oh My Posh in regular console
-        $themePath = Join-Path $env:POSH_THEMES_PATH "THEME_NAME.omp.json"
-        $initCmd = oh-my-posh init pwsh --config $themePath
-        Invoke-Expression $initCmd
+        oh-my-posh init pwsh --config  ~/THEME_NAME.omp.json | Invoke-Expression
     } else {
         # PowerShell ISE doesn't support ANSI color codes used by Oh My Posh
         Write-Host "Oh My Posh is disabled in PowerShell ISE, using simplified theme instead" -ForegroundColor Cyan
@@ -878,9 +974,29 @@ try {
             Write-ColorOutput "Also updating theme from '$existingTheme' to '$THEME'..." "Yellow"
         }
 
-        $regularProfileUpdated = Update-ProfileContent -ProfilePath $profilePath -NewConfiguration $ohMyPoshConfig
-        if (-not $regularProfileUpdated) {
-            throw "Failed to update regular PowerShell profile"
+        # Create a fresh clean profile
+        $newProfileCreated = New-CleanProfile -ProfilePath $profilePath -NewConfiguration $ohMyPoshConfig -ForceNewProfile
+        if (-not $newProfileCreated) {
+            throw "Failed to create a clean PowerShell profile"
+        }
+
+        # Also create fresh profiles for all detected editors if they exist
+        Write-ColorOutput "Ensuring clean profiles for all detected editors..." "Cyan"
+
+        # List of editor-specific profile paths we found earlier
+        $editorProfiles = $possibleProfiles | Where-Object {
+            ($_.Path -match $vscodeProfilePattern -or $_.Path -match $cursorProfilePattern) -and
+            (Test-Path $_.Path)
+        }
+
+        foreach ($editorProfile in $editorProfiles) {
+            if ($editorProfile.Path -ne $profilePath) { # Don't process the same profile twice
+                Write-ColorOutput "Creating clean profile for: $($editorProfile.Description)" "Cyan"
+                $editorProfileCreated = New-CleanProfile -ProfilePath $editorProfile.Path -NewConfiguration $ohMyPoshConfig -ForceNewProfile
+                if (-not $editorProfileCreated) {
+                    Write-ColorOutput "Warning: Failed to create clean profile for $($editorProfile.Description)" "Yellow"
+                }
+            }
         }
 
         # Now also configure the ISE-specific profile with a simplified theme
