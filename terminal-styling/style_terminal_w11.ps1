@@ -6,8 +6,69 @@
 # IMPORTANT: This script requires administrative privileges
 
 $ErrorActionPreference = "Stop"
-$THEME = "atomicBit" # or craver or anything, refer to: https://ohmyposh.dev/docs/themes
 
+
+function Write-ColorOutput {
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$Message,
+
+        [Parameter(Mandatory = $false)]
+        [string]$ForegroundColor = "White",
+        [Parameter(Mandatory = $false)]
+        [string]$NewLine = $true
+    )
+    if ($NewLine) {
+        Write-Host $Message -ForegroundColor $ForegroundColor
+
+    }
+    else {
+
+        Write-Host $Message -ForegroundColor $ForegroundColor -NoNewline
+    }
+}
+
+
+# Default theme - will be overridden by user selection
+function Select-OhMyPoshTheme {
+    # Define available themes with descriptions
+    $themes = @(
+        @{Name = "cloud-context"; Description = "Clean cloud theme with contextual information" },
+        @{Name = "craver"; Description = "Modern theme with git status and command execution time" },
+        @{Name = "clean-detailed"; Description = "Minimal theme with essential information" },
+        @{Name = "atomicBit"; Description = "Colorful theme with detailed git status" },
+        @{Name = "atomic"; Description = "Compact and vibrant theme" },
+        @{Name = "1_shell"; Description = "Simple single-line shell theme" }
+    )
+
+    # Display theme selection menu
+    Write-ColorOutput "`n╭────────────────────────────────────╮" "Cyan"
+    Write-ColorOutput "│      Oh My Posh Theme Selection     │" "Cyan"
+    Write-ColorOutput "╰────────────────────────────────────╯" "Cyan"
+
+    for ($i = 0; $i -lt $themes.Count; $i++) {
+        Write-ColorOutput "[$($i+1)] $($themes[$i].Name)" "White"
+        Write-ColorOutput "    $($themes[$i].Description)" "Gray"
+    }
+
+    Write-ColorOutput "`nSelect a theme [1-$($themes.Count)] (default: 1): " "Yellow" -
+    $selection = Read-Host
+
+    # Use default if empty or validate input
+    if ([string]::IsNullOrWhiteSpace($selection)) {
+        $selection = 1
+    }
+    elseif (-not ($selection -match '^\d+$') -or [int]$selection -lt 1 -or [int]$selection -gt $themes.Count) {
+        Write-ColorOutput "Invalid selection. Using default theme." "Red"
+        $selection = 1
+    }
+
+    $selectedTheme = $themes[$selection - 1].Name
+    Write-ColorOutput "Selected theme: $selectedTheme" "Green"
+
+    return $selectedTheme
+}
+$THEME = Select-OhMyPoshTheme
 # Check for administrative privileges
 function Test-Administrator {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent()
@@ -18,7 +79,7 @@ function Test-Administrator {
 # Function to safely check if a variable exists
 function Test-VariableExists {
     param (
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$Name
     )
 
@@ -38,18 +99,6 @@ if (-not (Test-Administrator)) {
     Write-Host "`nPress any key to exit..." -ForegroundColor Cyan
     $null = $host.UI.RawUI.ReadKey("NoEcho,IncludeKeyDown")
     exit 1
-}
-
-function Write-ColorOutput {
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$Message,
-
-        [Parameter(Mandatory = $false)]
-        [string]$ForegroundColor = "White"
-    )
-
-    Write-Host $Message -ForegroundColor $ForegroundColor
 }
 
 function Test-CommandExists {
@@ -91,7 +140,8 @@ function Clear-TemporaryFiles {
                 # Remove the file or directory
                 if ((Get-Item $path) -is [System.IO.DirectoryInfo]) {
                     Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
-                } else {
+                }
+                else {
                     Remove-Item -Path $path -Force -ErrorAction Stop
                 }
 
@@ -99,7 +149,8 @@ function Clear-TemporaryFiles {
                     Write-ColorOutput "Cleaned up temporary file: $path" "Green"
                 }
             }
-        } catch {
+        }
+        catch {
             if (-not $Silent) {
                 Write-ColorOutput "Failed to clean up: $path - $_" "Yellow"
             }
@@ -131,7 +182,8 @@ function Install-NerdFont {
             # Cleanup any temp files that might have been created by Oh My Posh
             Clear-TemporaryFiles -Silent
             return $true
-        } else {
+        }
+        else {
             Write-ColorOutput "Oh My Posh font installation returned an error. Exit code: $LASTEXITCODE" "Red"
             return $false
         }
@@ -189,7 +241,8 @@ function Install-OhMyPosh {
                 Stop-Job -Job $job
                 Remove-Job -Job $job -Force
                 $script:useAlternativeMethod = $true
-            } else {
+            }
+            else {
                 # Wait for job to complete and get all output
                 while ($job.State -eq 'Running' -and $timer.Elapsed.TotalSeconds -lt $timeout) {
                     if ($job.HasMoreData) {
@@ -206,24 +259,28 @@ function Install-OhMyPosh {
             if ($script:useAlternativeMethod) {
                 Write-ColorOutput "Switching to direct installation method..." "Yellow"
                 # Fall through to the direct installation method
-            } else {
+            }
+            else {
                 # Refresh environment variables for current session
                 RefreshEnvironmentVariables
 
                 if (Test-CommandExists "oh-my-posh") {
                     Write-ColorOutput "Oh My Posh installed successfully using winget." "Green"
                     return $true
-                } else {
+                }
+                else {
                     Write-ColorOutput "Oh My Posh not found after winget installation. Trying direct installation..." "Yellow"
                     $script:useAlternativeMethod = $true
                 }
             }
-        } catch {
+        }
+        catch {
             Write-ColorOutput "Failed to install Oh My Posh using winget: $_" "Red"
             Write-ColorOutput "Trying alternative installation method..." "Yellow"
             $script:useAlternativeMethod = $true
         }
-    } else {
+    }
+    else {
         Write-ColorOutput "Winget not found. Using direct installation method..." "Yellow"
         $script:useAlternativeMethod = $true
     }
@@ -246,7 +303,8 @@ function Install-OhMyPosh {
             if (Test-CommandExists "oh-my-posh") {
                 Write-ColorOutput "Oh My Posh installed successfully using installer script." "Green"
                 return $true
-            } else {
+            }
+            else {
                 Write-ColorOutput "Failed to detect Oh My Posh after installation." "Red"
 
                 # Last resort - try direct download and extraction
@@ -281,15 +339,18 @@ function Install-OhMyPosh {
                     if (Test-Path (Join-Path $targetDir "oh-my-posh.exe")) {
                         Write-ColorOutput "Oh My Posh installed manually to $targetDir" "Green"
                         return $true
-                    } else {
+                    }
+                    else {
                         return $false
                     }
-                } catch {
+                }
+                catch {
                     Write-ColorOutput "Manual installation failed: $_" "Red"
                     return $false
                 }
             }
-        } catch {
+        }
+        catch {
             Write-ColorOutput "Failed to install Oh My Posh: $_" "Red"
             return $false
         }
@@ -338,38 +399,38 @@ function RefreshEnvironmentVariables {
 # Function to create a simplified ISE-compatible prompt theme
 function Get-SimplifiedISETheme {
     param(
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [string]$ThemeName = $THEME
     )
 
     # Map Oh My Posh theme names to simple color schemes for ISE
     $themeColorMap = @{
         "atomicBit" = @{
-            "UserColor" = "Cyan"
-            "HostColor" = "Green"
-            "PathColor" = "Yellow"
-            "GitColor" = "Magenta"
-            "ErrorColor" = "Red"
+            "UserColor"    = "Cyan"
+            "HostColor"    = "Green"
+            "PathColor"    = "Yellow"
+            "GitColor"     = "Magenta"
+            "ErrorColor"   = "Red"
             "SuccessColor" = "Green"
-            "PromptChar" = ">"
+            "PromptChar"   = ">"
         }
-        "craver" = @{
-            "UserColor" = "Magenta"
-            "HostColor" = "Blue"
-            "PathColor" = "Yellow"
-            "GitColor" = "Cyan"
-            "ErrorColor" = "Red"
+        "craver"    = @{
+            "UserColor"    = "Magenta"
+            "HostColor"    = "Blue"
+            "PathColor"    = "Yellow"
+            "GitColor"     = "Cyan"
+            "ErrorColor"   = "Red"
             "SuccessColor" = "Green"
-            "PromptChar" = "λ"
+            "PromptChar"   = "λ"
         }
-        "default" = @{
-            "UserColor" = "Cyan"
-            "HostColor" = "Green"
-            "PathColor" = "Yellow"
-            "GitColor" = "Blue"
-            "ErrorColor" = "Red"
+        "default"   = @{
+            "UserColor"    = "Cyan"
+            "HostColor"    = "Green"
+            "PathColor"    = "Yellow"
+            "GitColor"     = "Blue"
+            "ErrorColor"   = "Red"
             "SuccessColor" = "Green"
-            "PromptChar" = ">"
+            "PromptChar"   = ">"
         }
     }
 
@@ -452,13 +513,13 @@ Write-Host "ISE-compatible theme activated based on $ThemeName. Oh My Posh featu
 # Function to update profile content safely without regex issues
 function Update-ProfileContent {
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$ProfilePath,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$NewConfiguration,
 
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [string]$ThemeName = $THEME
     )
 
@@ -569,13 +630,13 @@ function Update-ProfileContent {
 
 function New-CleanProfile {
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$ProfilePath,
 
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory = $true)]
         [string]$NewConfiguration,
 
-        [Parameter(Mandatory=$false)]
+        [Parameter(Mandatory = $false)]
         [switch]$ForceNewProfile
     )
 
@@ -641,7 +702,8 @@ $NewConfiguration
             Write-ColorOutput "Previous profile content is preserved in: $backupPath" "Cyan"
 
             return $true
-        } else {
+        }
+        else {
             # Profile doesn't exist, create a new one
             $profileDir = Split-Path -Parent $ProfilePath
             if (-not (Test-Path $profileDir)) {
@@ -661,7 +723,8 @@ $NewConfiguration
 
             return $true
         }
-    } catch {
+    }
+    catch {
         Write-ColorOutput "Error handling profile: $_" "Red"
         return $false
     }
@@ -707,14 +770,17 @@ function Update-PowerShellProfile {
                             return $PROFILE
                         }
                     }
-                } else {
+                }
+                else {
                     # Try to access property using different methods
                     if ($PROFILE.PSObject.Properties.Name -contains $ProfileType) {
                         return $PROFILE.$ProfileType
-                    } elseif ($ProfileType -eq "CurrentUserCurrentHost" -and
+                    }
+                    elseif ($ProfileType -eq "CurrentUserCurrentHost" -and
                              ($PROFILE | Get-Member -MemberType NoteProperty | Where-Object Name -eq "Path")) {
                         return $PROFILE.Path
-                    } else {
+                    }
+                    else {
                         # Build path manually as fallback
                         $basePath = if ($PROFILE -is [string]) { $PROFILE } else { $HOME }
                         $profileDir = Join-Path $basePath "Documents\WindowsPowerShell"
@@ -738,7 +804,8 @@ function Update-PowerShellProfile {
                         }
                     }
                 }
-            } catch {
+            }
+            catch {
                 # Absolute fallback
                 Write-ColorOutput "Error determining profile path for $ProfileType`: $_" "Yellow"
                 return Join-Path $HOME "Documents\WindowsPowerShell\Microsoft.PowerShell_profile.ps1"
@@ -759,16 +826,16 @@ function Update-PowerShellProfile {
             $possibleProfiles = @(
                 # Current user profiles
                 [PSCustomObject]@{
-                    Path = Get-SafeProfilePath -ProfileType "CurrentUserCurrentHost";
-                    Type = "CurrentUserCurrentHost";
+                    Path        = Get-SafeProfilePath -ProfileType "CurrentUserCurrentHost";
+                    Type        = "CurrentUserCurrentHost";
                     Description = "Current user, current host";
-                    IsDefault = $true
+                    IsDefault   = $true
                 },
                 [PSCustomObject]@{
-                    Path = Get-SafeProfilePath -ProfileType "CurrentUserAllHosts";
-                    Type = "CurrentUserAllHosts";
+                    Path        = Get-SafeProfilePath -ProfileType "CurrentUserAllHosts";
+                    Type        = "CurrentUserAllHosts";
                     Description = "Current user, all hosts";
-                    IsDefault = $false
+                    IsDefault   = $false
                 }
             )
 
@@ -795,10 +862,10 @@ function Update-PowerShellProfile {
                     # Check if this path is already in our list
                     if (-not ($possibleProfiles | Where-Object { $_.Path -eq $normalizedPath })) {
                         $possibleProfiles += [PSCustomObject]@{
-                            Path = $normalizedPath;
-                            Type = "${editor}Profile";
+                            Path        = $normalizedPath;
+                            Type        = "${editor}Profile";
                             Description = "$editor PowerShell profile";
-                            IsDefault = $false
+                            IsDefault   = $false
                         }
                     }
                 }
@@ -817,10 +884,10 @@ function Update-PowerShellProfile {
             # Fallback to basic detection if the advanced method fails
             $possibleProfiles = @(
                 [PSCustomObject]@{
-                    Path = $PROFILE.CurrentUserCurrentHost;
-                    Type = "CurrentUserCurrentHost";
+                    Path        = $PROFILE.CurrentUserCurrentHost;
+                    Type        = "CurrentUserCurrentHost";
                     Description = "Current user, current host";
-                    IsDefault = $true
+                    IsDefault   = $true
                 }
             )
             Write-ColorOutput "Falling back to basic profile: $($PROFILE.CurrentUserCurrentHost)" "Yellow"
@@ -990,7 +1057,8 @@ try {
         }
 
         foreach ($editorProfile in $editorProfiles) {
-            if ($editorProfile.Path -ne $profilePath) { # Don't process the same profile twice
+            if ($editorProfile.Path -ne $profilePath) {
+                # Don't process the same profile twice
                 Write-ColorOutput "Creating clean profile for: $($editorProfile.Description)" "Cyan"
                 $editorProfileCreated = New-CleanProfile -ProfilePath $editorProfile.Path -NewConfiguration $ohMyPoshConfig -ForceNewProfile
                 if (-not $editorProfileCreated) {
@@ -1003,7 +1071,8 @@ try {
         $currentUserPath = Get-SafeProfilePath -ProfileType "CurrentUserCurrentHost"
         $iseProfilePath = if ($currentUserPath -notmatch "Microsoft\.PowerShellISE_profile\.ps1") {
             $currentUserPath -replace "Microsoft\.PowerShell_profile\.ps1", "Microsoft.PowerShellISE_profile.ps1"
-        } else {
+        }
+        else {
             $currentUserPath
         }
 
@@ -1068,7 +1137,8 @@ try {
 
             # Write the updated content back to the file
             $newIseContent | Set-Content -Path $iseProfilePath -Force
-        } else {
+        }
+        else {
             # Create new ISE profile
             Write-ColorOutput "Creating new ISE profile with simplified theme..." "Yellow"
             $newIseContent = "# PowerShell ISE Profile - Theme-compatible prompt`n$iseThemeFunction`n"
@@ -1083,7 +1153,8 @@ try {
         Write-ColorOutput "  - ISE profile with simplified theme: $iseProfilePath" "Cyan"
 
         return $true
-    } catch {
+    }
+    catch {
         Write-ColorOutput "Failed to update PowerShell profiles: $_" "Red"
         # Additional debug information using the preserved $originalProfile
         if ($originalProfile -ne $null) {
@@ -1092,22 +1163,16 @@ try {
 
                 # Try to list all profile paths safely
                 Write-ColorOutput "Available profile paths:" "Yellow"
-                if ($originalProfile.PSObject.Properties.Name -contains "CurrentUserCurrentHost") {
-                    Write-ColorOutput "  CurrentUserCurrentHost: $($originalProfile.CurrentUserCurrentHost)" "Yellow"
-                }
-                if ($originalProfile.PSObject.Properties.Name -contains "CurrentUserAllHosts") {
-                    Write-ColorOutput "  CurrentUserAllHosts: $($originalProfile.CurrentUserAllHosts)" "Yellow"
-                }
-                if ($originalProfile.PSObject.Properties.Name -contains "AllUsersCurrentHost") {
-                    Write-ColorOutput "  AllUsersCurrentHost: $($originalProfile.AllUsersCurrentHost)" "Yellow"
-                }
-                if ($originalProfile.PSObject.Properties.Name -contains "AllUsersAllHosts") {
-                    Write-ColorOutput "  AllUsersAllHosts: $($originalProfile.AllUsersAllHosts)" "Yellow"
-                }
-            } catch {
+                Write-ColorOutput "  CurrentUserCurrentHost: $($originalProfile.CurrentUserCurrentHost)" "Yellow"
+                Write-ColorOutput "  CurrentUserAllHosts: $($originalProfile.CurrentUserAllHosts)" "Yellow"
+                Write-ColorOutput "  AllUsersCurrentHost: $($originalProfile.AllUsersCurrentHost)" "Yellow"
+                Write-ColorOutput "  AllUsersAllHosts: $($originalProfile.AllUsersAllHosts)" "Yellow"
+            }
+            catch {
                 Write-ColorOutput "Error accessing profile paths: $_" "Yellow"
             }
-        } else {
+        }
+        else {
             Write-ColorOutput "Original profile variable is null" "Yellow"
         }
 
@@ -1139,7 +1204,8 @@ function Update-WindowsTerminalSettings {
                 break
             }
         }
-    } catch {
+    }
+    catch {
         Write-ColorOutput "Error searching for Windows Terminal package: $_" "Yellow"
     }
 
@@ -1181,7 +1247,8 @@ function Update-WindowsTerminalSettings {
                     break
                 }
             }
-        } catch {
+        }
+        catch {
             Write-ColorOutput "Error during deep search for Windows Terminal settings: $_" "Yellow"
         }
     }
@@ -1207,19 +1274,22 @@ function Update-WindowsTerminalSettings {
                 $settingsJson.profiles.defaults | Add-Member -Type NoteProperty -Name "font" -Value @{
                     face = "MesloLGM Nerd Font"
                 }
-            } else {
+            }
+            else {
                 $settingsJson.profiles.defaults.font.face = "MesloLGM Nerd Font"
             }
 
             # Save the changes back to the file
             $settingsJson | ConvertTo-Json -Depth 20 | Set-Content -Path $settingsPath
             Write-ColorOutput "Windows Terminal settings updated with Nerd Font." "Green"
-        } else {
+        }
+        else {
             Write-ColorOutput "Windows Terminal already configured with Nerd Font." "Cyan"
         }
 
         return $true
-    } catch {
+    }
+    catch {
         Write-ColorOutput "Failed to update Windows Terminal settings: $_" "Red"
         return $false
     }
@@ -1242,7 +1312,8 @@ function Update-IDESettings {
             "$env:APPDATA\Code\User\settings.json",
             "$env:USERPROFILE\.vscode\settings.json"
         )
-    } elseif ($IDEType -eq "Cursor") {
+    }
+    elseif ($IDEType -eq "Cursor") {
         $potentialPaths = @(
             "$env:APPDATA\Cursor\User\settings.json",
             "$env:USERPROFILE\.cursor\settings.json",
@@ -1268,7 +1339,8 @@ function Update-IDESettings {
         # Check if file exists but is empty
         if ((Get-Item $settingsPath).Length -eq 0) {
             $content = "{}"
-        } else {
+        }
+        else {
             $content = Get-Content -Path $settingsPath -Raw
         }
 
@@ -1282,10 +1354,12 @@ function Update-IDESettings {
                 $cleanedContent = $content.Substring($jsonStartIndex)
                 $settingsJson = $cleanedContent | ConvertFrom-Json
                 Write-ColorOutput "Successfully parsed $IDEType settings using method 1." "Green"
-            } else {
+            }
+            else {
                 throw "No JSON object found in settings file"
             }
-        } catch {
+        }
+        catch {
             Write-ColorOutput "Method 1 failed: $_" "Yellow"
 
             # Method 2: Try to extract only valid JSON using regex
@@ -1295,10 +1369,12 @@ function Update-IDESettings {
                     $jsonMatch = $matches[0]
                     $settingsJson = $jsonMatch | ConvertFrom-Json
                     Write-ColorOutput "Successfully parsed $IDEType settings using method 2." "Green"
-                } else {
+                }
+                else {
                     throw "Could not extract valid JSON using regex"
                 }
-            } catch {
+            }
+            catch {
                 Write-ColorOutput "Method 2 failed: $_" "Yellow"
 
                 # Method 3: Remove all comment lines and try again
@@ -1310,10 +1386,12 @@ function Update-IDESettings {
                         $jsonMatch = $matches[0]
                         $settingsJson = $jsonMatch | ConvertFrom-Json
                         Write-ColorOutput "Successfully parsed $IDEType settings using method 3." "Green"
-                    } else {
+                    }
+                    else {
                         throw "Failed to find valid JSON after removing comments"
                     }
-                } catch {
+                }
+                catch {
                     Write-ColorOutput "All parsing methods failed. Creating minimal settings object." "Red"
                     # Create an empty object as a last resort
                     $settingsJson = [PSCustomObject]@{}
@@ -1339,18 +1417,21 @@ function Update-IDESettings {
                 $newJson = $settingsJson | ConvertTo-Json -Depth 10
                 $fullContent = $headerContent + $newJson
                 Set-Content -Path $settingsPath -Value $fullContent
-            } else {
+            }
+            else {
                 # Just write the JSON if we couldn't determine the header
                 $settingsJson | ConvertTo-Json -Depth 10 | Set-Content -Path $settingsPath
             }
 
             Write-ColorOutput "$IDEType settings updated with Nerd Font." "Green"
-        } else {
+        }
+        else {
             Write-ColorOutput "$IDEType already configured with Nerd Font." "Cyan"
         }
 
         return $true
-    } catch {
+    }
+    catch {
         Write-ColorOutput "Failed to update $IDEType settings: $_" "Red"
         return $false
     }
@@ -1361,17 +1442,20 @@ try {
     Write-ColorOutput "Starting terminal styling script..." "Magenta"
     Write-ColorOutput "----------------------------------" "Magenta"
 
+    # Prompt user to select a theme
+    $THEME = Select-OhMyPoshTheme
+
     # Set strict error handling for better line number reporting
     Set-StrictMode -Version Latest
 
     # Create a status tracker
     $StatusTracker = [ordered]@{
-        "Oh My Posh" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
-        "Nerd Font" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
+        "Oh My Posh"         = @{ Status = $false; Message = "Not Started"; Color = "Red" }
+        "Nerd Font"          = @{ Status = $false; Message = "Not Started"; Color = "Red" }
         "PowerShell Profile" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
-        "Windows Terminal" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
-        "VS Code" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
-        "Cursor" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
+        "Windows Terminal"   = @{ Status = $false; Message = "Not Started"; Color = "Red" }
+        "VS Code"            = @{ Status = $false; Message = "Not Started"; Color = "Red" }
+        "Cursor"             = @{ Status = $false; Message = "Not Started"; Color = "Red" }
     }
 
     # Step 1: Install Oh My Posh FIRST (before font installation)
@@ -1382,7 +1466,8 @@ try {
         $StatusTracker."Oh My Posh".Status = $true
         $StatusTracker."Oh My Posh".Message = "Installed (theme:$($THEME))"
         $StatusTracker."Oh My Posh".Color = "Green"
-    } else {
+    }
+    else {
         $StatusTracker."Oh My Posh".Message = "Failed"
         throw "Failed to install Oh My Posh. Aborting."
     }
@@ -1395,7 +1480,8 @@ try {
         $StatusTracker."Nerd Font".Status = $true
         $StatusTracker."Nerd Font".Message = "Installed"
         $StatusTracker."Nerd Font".Color = "Green"
-    } else {
+    }
+    else {
         $StatusTracker."Nerd Font".Message = "Warning: Installation issues"
         $StatusTracker."Nerd Font".Color = "Yellow"
         Write-ColorOutput "Warning: Nerd Font installation might have issues. Continuing..." "Yellow"
@@ -1409,7 +1495,8 @@ try {
         $StatusTracker."PowerShell Profile".Status = $true
         $StatusTracker."PowerShell Profile".Message = "Configured"
         $StatusTracker."PowerShell Profile".Color = "Green"
-    } else {
+    }
+    else {
         $StatusTracker."PowerShell Profile".Message = "Failed"
         throw "Failed to update PowerShell profile. Aborting."
     }
@@ -1422,7 +1509,8 @@ try {
         $StatusTracker."Windows Terminal".Status = $true
         $StatusTracker."Windows Terminal".Message = "Configured"
         $StatusTracker."Windows Terminal".Color = "Green"
-    } else {
+    }
+    else {
         $StatusTracker."Windows Terminal".Message = "Failed"
         $StatusTracker."Windows Terminal".Color = "Red"
     }
@@ -1435,7 +1523,8 @@ try {
         $StatusTracker."VS Code".Status = $true
         $StatusTracker."VS Code".Message = "Configured"
         $StatusTracker."VS Code".Color = "Green"
-    } else {
+    }
+    else {
         $StatusTracker."VS Code".Message = "Failed"
         $StatusTracker."VS Code".Color = "Red"
     }
@@ -1448,7 +1537,8 @@ try {
         $StatusTracker."Cursor".Status = $true
         $StatusTracker."Cursor".Message = "Configured"
         $StatusTracker."Cursor".Color = "Green"
-    } else {
+    }
+    else {
         $StatusTracker."Cursor".Message = "Failed"
         $StatusTracker."Cursor".Color = "Red"
     }
@@ -1488,7 +1578,8 @@ try {
     Clear-TemporaryFiles
     Write-ColorOutput "Cleanup complete." "Green"
 
-} catch {
+}
+catch {
     # Enhanced error reporting with line numbers
     $errorRecord = $_
     $exception = $errorRecord.Exception
