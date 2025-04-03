@@ -570,7 +570,9 @@ try {
 
     if (-not $isInISE) {
         # Only initialize Oh My Posh in regular console
-        oh-my-posh init pwsh --config "$env:POSH_THEMES_PATH\THEME_NAME.omp.json" | Invoke-Expression
+        $themePath = Join-Path $env:POSH_THEMES_PATH "THEME_NAME.omp.json"
+        $initCmd = oh-my-posh init pwsh --config $themePath
+        Invoke-Expression $initCmd
     } else {
         # PowerShell ISE doesn't support ANSI color codes used by Oh My Posh
         Write-Host "Oh My Posh is disabled in PowerShell ISE, using simplified theme instead" -ForegroundColor Cyan
