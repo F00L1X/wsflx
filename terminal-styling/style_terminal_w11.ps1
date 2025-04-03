@@ -556,7 +556,7 @@ try {
     $ohMyPoshInstalled = Install-OhMyPosh
     if ($ohMyPoshInstalled) {
         $StatusTracker."Oh My Posh".Status = $true
-        $StatusTracker."Oh My Posh".Message = "Installed"
+        $StatusTracker."Oh My Posh".Message = "Installed (theme:$($THEME))"
         $StatusTracker."Oh My Posh".Color = "Green"
     } else {
         $StatusTracker."Oh My Posh".Message = "Failed"
