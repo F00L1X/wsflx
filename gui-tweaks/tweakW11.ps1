@@ -604,3 +604,50 @@ catch {
 }
 
 Write-TweakLog -Message "Script execution complete" -Type Success
+
+
+$PowerSettings = Get-WmiObject -Namespace root\cimv2\power -Class Win32_PowerPlan | ForEach-Object {
+    $PlanGuid = $_.InstanceID.Split('\')[-1]
+    $PlanName = $_.ElementName
+    $SubGroups = Get-WmiObject -Namespace root\cimv2\power -Class Win32_PowerPlanSetting | Where-Object { $_.PlanGuid -eq $PlanGuid }
+
+    [PSCustomObject]@{
+        PlanGuid  = $PlanGuid
+        PlanName  = $PlanName
+        SubGroups = $SubGroups | Group-Object -Property SubGroupGuid | ForEach-Object {
+            $SubGroupGuid = $_.Name
+            $SubGroupName = ($_.Group | Select-Object -First 1).SubGroupName
+            $Settings = $_.Group | ForEach-Object {
+                [PSCustomObject]@{
+                    SettingGuid  = $_.SettingGuid
+                    SettingName  = $_SettingName
+                    SettingValue = $_SettingValue
+                }
+            }
+            [PSCustomObject]@{
+                SubGroupGuid = $SubGroupGuid
+                SubGroupName = $SubGroupName
+                Settings     = $Settings
+            }
+        }
+    }
+}
+
+# Now $PowerSettings contains the power settings.
+# Example: Accessing the first power plan's name:
+$PowerSettings[0].PlanName
+
+#Example: Accessing the first subgroup of the first power plan
+$PowerSettings[0].SubGroups[0].SubGroupName
+
+#Example: Accessing the first setting within the first subgroup of the first power plan
+$PowerSettings[0].SubGroups[0].Settings[0].SettingName
+
+#Example: Accessing the value of the first setting within the first subgroup of the first power plan
+$PowerSettings[0].SubGroups[0].Settings[0].SettingValue
+
+#Example : Displaying all power plans
+$PowerSettings | Format-List -Property PlanName, PlanGuid, SubGroups
+
+#Example : Displaying all settings of a specific plan. Replace the GUID with your plans guid.
+$PowerSettings | Where-Object { $_.PlanGuid -eq "your-plan-guid-here" } | Select-Object -ExpandProperty SubGroups | Select-Object -ExpandProperty Settings
