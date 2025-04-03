@@ -327,31 +327,75 @@ function Update-PowerShellProfile {
     Write-ColorOutput "Configuring PowerShell profile..." "Yellow"
 
     try {
+        # Determine the correct profile path based on the environment
+        $profilePath = $PROFILE
+        $profileType = "Default PowerShell profile"
+
+        # Check if we're running in Windows Terminal
+        $inWindowsTerminal = $env:WT_SESSION -or $env:WT_PROFILE_ID
+        if ($inWindowsTerminal) {
+            Write-ColorOutput "Detected Windows Terminal environment." "Cyan"
+            $profileType = "Windows Terminal PowerShell profile"
+
+            # For Windows Terminal, we might need to use a different profile path
+            # Get potential profile paths for Windows Terminal
+            $potentialProfiles = @(
+                $PROFILE,
+                $PROFILE.CurrentUserCurrentHost,
+                $PROFILE.CurrentUserAllHosts,
+                $PROFILE.AllUsersCurrentHost,
+                $PROFILE.AllUsersAllHosts
+            ) | Select-Object -Unique
+
+            # Find the first existing profile or create one
+            $existingProfile = $potentialProfiles | Where-Object { Test-Path $_ } | Select-Object -First 1
+            if ($existingProfile) {
+                $profilePath = $existingProfile
+                Write-ColorOutput "Using existing profile: $profilePath" "Cyan"
+            } else {
+                # Default to CurrentUserCurrentHost if none exists
+                $profilePath = $PROFILE.CurrentUserCurrentHost
+                Write-ColorOutput "No existing profile found, will create: $profilePath" "Yellow"
+            }
+        }
+
+        Write-ColorOutput "Using $profileType at: $profilePath" "Cyan"
+
         # Create PowerShell profile directory if it doesn't exist
-        $profileDir = Split-Path -Parent $PROFILE
+        $profileDir = Split-Path -Parent $profilePath
         if (-not (Test-Path $profileDir)) {
+            Write-ColorOutput "Creating profile directory: $profileDir" "Yellow"
             New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
         }
 
         # Create PowerShell profile if it doesn't exist
-        if (-not (Test-Path $PROFILE)) {
-            New-Item -ItemType File -Path $PROFILE -Force | Out-Null
+        if (-not (Test-Path $profilePath)) {
+            Write-ColorOutput "Creating new profile file: $profilePath" "Yellow"
+            New-Item -ItemType File -Path $profilePath -Force | Out-Null
+            $profileContent = ""
+        } else {
+            # Read existing profile content with extra error handling
+            try {
+                $profileContent = Get-Content -Path $profilePath -Raw -ErrorAction Stop
+                if ([string]::IsNullOrWhiteSpace($profileContent)) {
+                    Write-ColorOutput "Profile exists but is empty." "Yellow"
+                    $profileContent = ""
+                }
+            } catch {
+                Write-ColorOutput "Error reading profile (will create empty profile): $_" "Yellow"
+                $profileContent = ""
+            }
         }
 
-        # Check if Oh My Posh is already configured in the profile
-        $profileContent = Get-Content -Path $PROFILE -ErrorAction SilentlyContinue
         $newOhMyPoshConfig = "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
         $ohMyPoshConfigured = $false
         $existingTheme = $null
 
         # Try to detect existing Oh My Posh configuration and extract theme
-        if ($profileContent -and ($profileContent.Count -gt 0)) {
-            # Convert profile content to string if it's an array
-            $profileText = if ($profileContent -is [array]) { $profileContent -join "`n" } else { $profileContent }
-
+        if (-not [string]::IsNullOrWhiteSpace($profileContent)) {
             # Look for the Oh My Posh init line with regex to extract theme
             $ohMyPoshPattern = 'oh-my-posh\s+init\s+pwsh\s+--config\s+[`"]?\$env:POSH_THEMES_PATH\\([^\.]+)\.omp\.json[`"]?\s+\|\s+Invoke-Expression'
-            if ($profileText -match $ohMyPoshPattern) {
+            if ($profileContent -match $ohMyPoshPattern) {
                 $ohMyPoshConfigured = $true
                 $existingTheme = $matches[1]
                 Write-ColorOutput "Found existing Oh My Posh configuration with theme: $existingTheme" "Cyan"
@@ -361,13 +405,13 @@ function Update-PowerShellProfile {
                     Write-ColorOutput "Updating Oh My Posh theme from '$existingTheme' to '$THEME'..." "Yellow"
 
                     # Replace the existing Oh My Posh configuration with the new one
-                    $updatedContent = $profileText -replace $ohMyPoshPattern, "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
-                    Set-Content -Path $PROFILE -Value $updatedContent
+                    $updatedContent = $profileContent -replace $ohMyPoshPattern, "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
+                    Set-Content -Path $profilePath -Value $updatedContent -Force
                     Write-ColorOutput "Oh My Posh theme updated in PowerShell profile." "Green"
                 } else {
                     Write-ColorOutput "Oh My Posh already configured with theme '$THEME'. No changes needed." "Green"
                 }
-            } elseif ($profileText -match "oh-my-posh init pwsh") {
+            } elseif ($profileContent -match "oh-my-posh init pwsh") {
                 # Found Oh My Posh but couldn't parse theme, more generic pattern
                 $ohMyPoshConfigured = $true
                 Write-ColorOutput "Found existing Oh My Posh configuration but couldn't detect theme." "Yellow"
@@ -375,14 +419,14 @@ function Update-PowerShellProfile {
 
                 # Try to replace the line with a more generic pattern
                 $genericPattern = 'oh-my-posh\s+init\s+pwsh.*\|\s+Invoke-Expression'
-                $updatedContent = $profileText -replace $genericPattern, $newOhMyPoshConfig
+                $updatedContent = $profileContent -replace $genericPattern, $newOhMyPoshConfig
 
-                if ($updatedContent -ne $profileText) {
-                    Set-Content -Path $PROFILE -Value $updatedContent
+                if ($updatedContent -ne $profileContent) {
+                    Set-Content -Path $profilePath -Value $updatedContent -Force
                     Write-ColorOutput "Oh My Posh configuration updated in PowerShell profile." "Green"
                 } else {
                     # Couldn't replace with regex, just add the new config
-                    Add-Content -Path $PROFILE -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
+                    Add-Content -Path $profilePath -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n" -Force
                     Write-ColorOutput "Added new Oh My Posh configuration to PowerShell profile." "Green"
                 }
             } else {
@@ -390,14 +434,20 @@ function Update-PowerShellProfile {
                 $ohMyPoshConfigured = $false
             }
         } else {
-            # Profile exists but is empty or couldn't be read
-            Write-ColorOutput "PowerShell profile exists but is empty or couldn't be read." "Yellow"
+            # Profile is empty
+            Write-ColorOutput "Profile is empty, will add new Oh My Posh configuration." "Yellow"
             $ohMyPoshConfigured = $false
         }
 
         # If Oh My Posh is not configured yet, add it
         if (-not $ohMyPoshConfigured) {
-            Add-Content -Path $PROFILE -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
+            $newContent = if ([string]::IsNullOrWhiteSpace($profileContent)) {
+                "# Oh My Posh Theme`n$newOhMyPoshConfig`n"
+            } else {
+                "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
+            }
+
+            Add-Content -Path $profilePath -Value $newContent -Force
             Write-ColorOutput "Oh My Posh configured in PowerShell profile with theme: $THEME" "Green"
         }
 
@@ -405,12 +455,23 @@ function Update-PowerShellProfile {
     } catch {
         Write-ColorOutput "Failed to update PowerShell profile: $_" "Red"
         # Additional debug information
-        Write-ColorOutput "Profile path: $PROFILE" "Yellow"
-        if (Test-Path $PROFILE) {
-            Write-ColorOutput "Profile exists, size: $((Get-Item $PROFILE).Length) bytes" "Yellow"
-        } else {
-            Write-ColorOutput "Profile doesn't exist" "Yellow"
+        Write-ColorOutput "Profile variable: $PROFILE" "Yellow"
+
+        # Try to list all profile paths
+        Write-ColorOutput "Available profile paths:" "Yellow"
+        Write-ColorOutput "  CurrentUserCurrentHost: $($PROFILE.CurrentUserCurrentHost)" "Yellow"
+        Write-ColorOutput "  CurrentUserAllHosts: $($PROFILE.CurrentUserAllHosts)" "Yellow"
+        Write-ColorOutput "  AllUsersCurrentHost: $($PROFILE.AllUsersCurrentHost)" "Yellow"
+        Write-ColorOutput "  AllUsersAllHosts: $($PROFILE.AllUsersAllHosts)" "Yellow"
+
+        # Check PowerShell version
+        Write-ColorOutput "PowerShell version: $($PSVersionTable.PSVersion)" "Yellow"
+
+        # Check if Windows Terminal
+        if ($env:WT_SESSION -or $env:WT_PROFILE_ID) {
+            Write-ColorOutput "Running in Windows Terminal" "Yellow"
         }
+
         return $false
     }
 }
@@ -648,10 +709,13 @@ function Update-IDESettings {
     }
 }
 
-# Main script execution
+# Main script execution - enhanced error handling
 try {
     Write-ColorOutput "Starting terminal styling script..." "Magenta"
     Write-ColorOutput "----------------------------------" "Magenta"
+
+    # Set strict error handling for better line number reporting
+    Set-StrictMode -Version Latest
 
     # Create a status tracker
     $StatusTracker = [ordered]@{
@@ -778,8 +842,38 @@ try {
     Write-ColorOutput "Cleanup complete." "Green"
 
 } catch {
-    Write-ColorOutput "An error occurred: $_" "Red"
-    Write-ColorOutput "Please try running the script again or manually complete the remaining steps." "Red"
+    # Enhanced error reporting with line numbers
+    $errorRecord = $_
+    $exception = $errorRecord.Exception
+    $message = $exception.Message
+
+    Write-ColorOutput "`n========== ERROR DETAILS ==========" "Red"
+    Write-ColorOutput "An error occurred: $message" "Red"
+
+    # Try to get exact error location
+    if ($errorRecord.InvocationInfo) {
+        $line = $errorRecord.InvocationInfo.ScriptLineNumber
+        $positionMessage = $errorRecord.InvocationInfo.PositionMessage
+        $command = $errorRecord.InvocationInfo.Line.Trim()
+
+        Write-ColorOutput "Error occurred on line: $line" "Red"
+        Write-ColorOutput "Command: $command" "Red"
+        Write-ColorOutput "Position: $positionMessage" "Red"
+    }
+
+    # Get call stack if available
+    if ($errorRecord.ScriptStackTrace) {
+        Write-ColorOutput "`nCall Stack:" "Yellow"
+        Write-ColorOutput $errorRecord.ScriptStackTrace "Yellow"
+    }
+
+    # Get full error record details
+    Write-ColorOutput "`nFull Error Record:" "Yellow"
+    Write-ColorOutput ($errorRecord | Format-List * -Force | Out-String) "Yellow"
+
+    Write-ColorOutput "`nPlease try running the script again or manually complete the remaining steps." "Red"
+    Write-ColorOutput "For support, please provide the above error details." "Red"
+    Write-ColorOutput "===================================`n" "Red"
 
     # Even if there's an error, try to clean up temporary files
     Write-ColorOutput "Cleaning up temporary files..." "Yellow"
