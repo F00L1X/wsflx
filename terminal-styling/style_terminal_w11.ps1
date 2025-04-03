@@ -326,76 +326,93 @@ function RefreshEnvironmentVariables {
 function Update-PowerShellProfile {
     Write-ColorOutput "Configuring PowerShell profile..." "Yellow"
 
-    # Create PowerShell profile directory if it doesn't exist
-    $profileDir = Split-Path -Parent $PROFILE
-    if (-not (Test-Path $profileDir)) {
-        New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
-    }
-
-    # Create PowerShell profile if it doesn't exist
-    if (-not (Test-Path $PROFILE)) {
-        New-Item -ItemType File -Path $PROFILE -Force | Out-Null
-    }
-
-    # Check if Oh My Posh is already configured in the profile
-    $profileContent = Get-Content -Path $PROFILE -ErrorAction SilentlyContinue
-    $newOhMyPoshConfig = "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
-    $ohMyPoshConfigured = $false
-    $existingTheme = $null
-
-    # Try to detect existing Oh My Posh configuration and extract theme
-    if ($profileContent) {
-        # Look for the Oh My Posh init line with regex to extract theme
-        $ohMyPoshPattern = 'oh-my-posh\s+init\s+pwsh\s+--config\s+[`"]?\$env:POSH_THEMES_PATH\\([^\.]+)\.omp\.json[`"]?\s+\|\s+Invoke-Expression'
-        if ($profileContent -match $ohMyPoshPattern) {
-            $ohMyPoshConfigured = $true
-            $existingTheme = $matches[1]
-            Write-ColorOutput "Found existing Oh My Posh configuration with theme: $existingTheme" "Cyan"
-
-            # Check if we need to update the theme
-            if ($existingTheme -ne $THEME) {
-                Write-ColorOutput "Updating Oh My Posh theme from '$existingTheme' to '$THEME'..." "Yellow"
-
-                # Replace the existing Oh My Posh configuration with the new one
-                $updatedContent = $profileContent -replace $ohMyPoshPattern, "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
-                Set-Content -Path $PROFILE -Value $updatedContent
-                Write-ColorOutput "Oh My Posh theme updated in PowerShell profile." "Green"
-            } else {
-                Write-ColorOutput "Oh My Posh already configured with theme '$THEME'. No changes needed." "Green"
-            }
-        } elseif ($profileContent -match "oh-my-posh init pwsh") {
-            # Found Oh My Posh but couldn't parse theme, more generic pattern
-            $ohMyPoshConfigured = $true
-            Write-ColorOutput "Found existing Oh My Posh configuration but couldn't detect theme." "Yellow"
-            Write-ColorOutput "Updating to use theme: $THEME" "Yellow"
-
-            # Try to replace the line with a more generic pattern
-            $genericPattern = 'oh-my-posh\s+init\s+pwsh.*\|\s+Invoke-Expression'
-            $updatedContent = $profileContent -replace $genericPattern, $newOhMyPoshConfig
-
-            if ($updatedContent -ne $profileContent) {
-                Set-Content -Path $PROFILE -Value $updatedContent
-                Write-ColorOutput "Oh My Posh configuration updated in PowerShell profile." "Green"
-            } else {
-                # Couldn't replace with regex, just add the new config
-                Add-Content -Path $PROFILE -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
-                Write-ColorOutput "Added new Oh My Posh configuration to PowerShell profile." "Green"
-            }
+    try {
+        # Create PowerShell profile directory if it doesn't exist
+        $profileDir = Split-Path -Parent $PROFILE
+        if (-not (Test-Path $profileDir)) {
+            New-Item -ItemType Directory -Path $profileDir -Force | Out-Null
         }
-    }
 
-    # If Oh My Posh is not configured yet, add it
-    if (-not $ohMyPoshConfigured) {
-        try {
+        # Create PowerShell profile if it doesn't exist
+        if (-not (Test-Path $PROFILE)) {
+            New-Item -ItemType File -Path $PROFILE -Force | Out-Null
+        }
+
+        # Check if Oh My Posh is already configured in the profile
+        $profileContent = Get-Content -Path $PROFILE -ErrorAction SilentlyContinue
+        $newOhMyPoshConfig = "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
+        $ohMyPoshConfigured = $false
+        $existingTheme = $null
+
+        # Try to detect existing Oh My Posh configuration and extract theme
+        if ($profileContent -and ($profileContent.Count -gt 0)) {
+            # Convert profile content to string if it's an array
+            $profileText = if ($profileContent -is [array]) { $profileContent -join "`n" } else { $profileContent }
+
+            # Look for the Oh My Posh init line with regex to extract theme
+            $ohMyPoshPattern = 'oh-my-posh\s+init\s+pwsh\s+--config\s+[`"]?\$env:POSH_THEMES_PATH\\([^\.]+)\.omp\.json[`"]?\s+\|\s+Invoke-Expression'
+            if ($profileText -match $ohMyPoshPattern) {
+                $ohMyPoshConfigured = $true
+                $existingTheme = $matches[1]
+                Write-ColorOutput "Found existing Oh My Posh configuration with theme: $existingTheme" "Cyan"
+
+                # Check if we need to update the theme
+                if ($existingTheme -ne $THEME) {
+                    Write-ColorOutput "Updating Oh My Posh theme from '$existingTheme' to '$THEME'..." "Yellow"
+
+                    # Replace the existing Oh My Posh configuration with the new one
+                    $updatedContent = $profileText -replace $ohMyPoshPattern, "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
+                    Set-Content -Path $PROFILE -Value $updatedContent
+                    Write-ColorOutput "Oh My Posh theme updated in PowerShell profile." "Green"
+                } else {
+                    Write-ColorOutput "Oh My Posh already configured with theme '$THEME'. No changes needed." "Green"
+                }
+            } elseif ($profileText -match "oh-my-posh init pwsh") {
+                # Found Oh My Posh but couldn't parse theme, more generic pattern
+                $ohMyPoshConfigured = $true
+                Write-ColorOutput "Found existing Oh My Posh configuration but couldn't detect theme." "Yellow"
+                Write-ColorOutput "Updating to use theme: $THEME" "Yellow"
+
+                # Try to replace the line with a more generic pattern
+                $genericPattern = 'oh-my-posh\s+init\s+pwsh.*\|\s+Invoke-Expression'
+                $updatedContent = $profileText -replace $genericPattern, $newOhMyPoshConfig
+
+                if ($updatedContent -ne $profileText) {
+                    Set-Content -Path $PROFILE -Value $updatedContent
+                    Write-ColorOutput "Oh My Posh configuration updated in PowerShell profile." "Green"
+                } else {
+                    # Couldn't replace with regex, just add the new config
+                    Add-Content -Path $PROFILE -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
+                    Write-ColorOutput "Added new Oh My Posh configuration to PowerShell profile." "Green"
+                }
+            } else {
+                # No Oh My Posh config found
+                $ohMyPoshConfigured = $false
+            }
+        } else {
+            # Profile exists but is empty or couldn't be read
+            Write-ColorOutput "PowerShell profile exists but is empty or couldn't be read." "Yellow"
+            $ohMyPoshConfigured = $false
+        }
+
+        # If Oh My Posh is not configured yet, add it
+        if (-not $ohMyPoshConfigured) {
             Add-Content -Path $PROFILE -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
             Write-ColorOutput "Oh My Posh configured in PowerShell profile with theme: $THEME" "Green"
-        } catch {
-            Write-ColorOutput "Failed to update PowerShell profile: $_" "Red"
-            return $false
         }
-    }
 
-    return $true
+        return $true
+    } catch {
+        Write-ColorOutput "Failed to update PowerShell profile: $_" "Red"
+        # Additional debug information
+        Write-ColorOutput "Profile path: $PROFILE" "Yellow"
+        if (Test-Path $PROFILE) {
+            Write-ColorOutput "Profile exists, size: $((Get-Item $PROFILE).Length) bytes" "Yellow"
+        } else {
+            Write-ColorOutput "Profile doesn't exist" "Yellow"
+        }
+        return $false
+    }
 }
 
 function Update-WindowsTerminalSettings {
