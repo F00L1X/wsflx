@@ -1,5 +1,5 @@
 ﻿# Style Terminal for Windows (7-11)
-# This script installs Oh My Posh and configures fonts for PowerShell, Windows Terminal, and VS Code
+# This script installs "Oh My Posh" and configures fonts for PowerShell, Windows Terminal, VS Code & Cursor
 # Author: WSFLX
 # Version: 1.0
 # IMPORTANT: This script requires administrative privileges
