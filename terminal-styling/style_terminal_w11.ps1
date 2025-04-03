@@ -422,8 +422,6 @@ function Update-PowerShellProfile {
             }
         }
 
-        # Adjust the Oh My Posh initialization based on environment
-        if ($inPowerShellISE) {
             # For PowerShell ISE, add a conditional initialization that only runs in regular PowerShell
             $newOhMyPoshConfig = @"
 # Oh My Posh Theme - Only initialize in compatible terminals, not in ISE
@@ -447,17 +445,6 @@ try {
     Write-Host "Oh My Posh initialization failed: `$_" -ForegroundColor Yellow
 }
 "@
-        } else {
-            # For regular PowerShell or Windows Terminal - add safeguard
-            $newOhMyPoshConfig = @"
-# Oh My Posh Theme
-try {
-    oh-my-posh init pwsh --config "`$env:POSH_THEMES_PATH\$($THEME).omp.json" | Invoke-Expression
-} catch {
-    Write-Host "Oh My Posh initialization failed: `$_" -ForegroundColor Yellow
-}
-"@
-        }
 
         $ohMyPoshConfigured = $false
         $existingTheme = $null
