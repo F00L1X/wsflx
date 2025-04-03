@@ -16,9 +16,14 @@ Automatically style your terminal environment for Windows with Oh My Posh, custo
 
 #### 🚀 Quick Start
 
-##### Option 1: Run directly from GitHub (recommended)
+##### Option 1: Download and run (recommended)
 ```powershell
-irm https://raw.githubusercontent.com/F00L1X/wsflx/main/terminal-styling/style_terminal_w11.ps1 | iex
+# Download the script first
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/terminal-styling/style_terminal_w11.ps1" -OutFile "$env:TEMP\style_terminal_w11.ps1"
+
+# Execute the downloaded script
+Set-ExecutionPolicy Bypass -Scope Process -Force
+& "$env:TEMP\style_terminal_w11.ps1"
 ```
 
 ##### Option 2: Clone and run locally
