@@ -94,20 +94,41 @@ function Install-OhMyPosh {
     if (Test-CommandExists "winget") {
         try {
             Write-ColorOutput "Installing Oh My Posh using winget..." "Yellow"
-            winget install JanDeDobbeleer.OhMyPosh -e
+            Write-ColorOutput "This may take a minute, please wait..." "Yellow"
 
-            # Refresh environment variables for current session
-            RefreshEnvironmentVariables
+            # Use Start-Process to run winget with a timeout to avoid hanging
+            $proc = Start-Process -FilePath "winget" -ArgumentList "install", "JanDeDobbeleer.OhMyPosh", "-e", "--accept-source-agreements", "--accept-package-agreements" -NoNewWindow -PassThru
 
-            if (Test-CommandExists "oh-my-posh") {
-                Write-ColorOutput "Oh My Posh installed successfully using winget." "Green"
-                return $true
+            # Wait for the process with a timeout (1,5 minutes)
+            $waitResult = $proc.WaitForExit(90000)
+
+            if (-not $waitResult) {
+                Write-ColorOutput "Winget installation is taking too long, attempting to terminate..." "Yellow"
+                try {
+                    $proc.Kill()
+                } catch {
+                    # Process might have exited between our check and kill attempt
+                }
+
+                Write-ColorOutput "Switching to direct installation method..." "Yellow"
+                # Fall through to the direct installation method
+            } else {
+                # Refresh environment variables for current session
+                RefreshEnvironmentVariables
+
+                if (Test-CommandExists "oh-my-posh") {
+                    Write-ColorOutput "Oh My Posh installed successfully using winget." "Green"
+                    return $true
+                } else {
+                    Write-ColorOutput "Oh My Posh not found after winget installation. Trying direct installation..." "Yellow"
+                }
             }
         } catch {
             Write-ColorOutput "Failed to install Oh My Posh using winget: $_" "Red"
+            Write-ColorOutput "Trying alternative installation method..." "Yellow"
         }
     } else {
-        Write-ColorOutput "Winget not found. Trying alternative installation method..." "Yellow"
+        Write-ColorOutput "Winget not found. Using direct installation method..." "Yellow"
     }
 
     # Alternative installation using direct installer
@@ -115,7 +136,10 @@ function Install-OhMyPosh {
         Write-ColorOutput "Installing Oh My Posh using installer script..." "Yellow"
 
         Set-ExecutionPolicy Bypass -Scope Process -Force
-        Invoke-Expression ((New-Object System.Net.WebClient).DownloadString('https://ohmyposh.dev/install.ps1'))
+        Write-ColorOutput "Downloading installer..." "Yellow"
+        $installerContent = (New-Object System.Net.WebClient).DownloadString('https://ohmyposh.dev/install.ps1')
+        Write-ColorOutput "Running installer..." "Yellow"
+        Invoke-Expression $installerContent
 
         # Refresh environment variables for current session
         RefreshEnvironmentVariables
@@ -124,8 +148,47 @@ function Install-OhMyPosh {
             Write-ColorOutput "Oh My Posh installed successfully using installer script." "Green"
             return $true
         } else {
-            Write-ColorOutput "Failed to install Oh My Posh." "Red"
-            return $false
+            Write-ColorOutput "Failed to detect Oh My Posh after installation." "Red"
+
+            # Last resort - try direct download and extraction
+            try {
+                Write-ColorOutput "Attempting manual installation..." "Yellow"
+
+                # Download latest release
+                $tempFolder = Join-Path $env:TEMP "OhMyPosh"
+                if (-not (Test-Path $tempFolder)) {
+                    New-Item -ItemType Directory -Path $tempFolder -Force | Out-Null
+                }
+
+                # Direct download the executable
+                $downloadUrl = "https://github.com/JanDeDobbeleer/oh-my-posh/releases/latest/download/posh-windows-amd64.exe"
+                $exePath = Join-Path $tempFolder "oh-my-posh.exe"
+
+                (New-Object System.Net.WebClient).DownloadFile($downloadUrl, $exePath)
+
+                # Create a folder in the user's profile
+                $targetDir = Join-Path $env:USERPROFILE ".oh-my-posh"
+                if (-not (Test-Path $targetDir)) {
+                    New-Item -ItemType Directory -Path $targetDir -Force | Out-Null
+                }
+
+                # Copy the file
+                Copy-Item -Path $exePath -Destination (Join-Path $targetDir "oh-my-posh.exe") -Force
+
+                # Add to path
+                $env:Path = "$targetDir;$env:Path"
+                [Environment]::SetEnvironmentVariable("Path", $env:Path, "User")
+
+                if (Test-Path (Join-Path $targetDir "oh-my-posh.exe")) {
+                    Write-ColorOutput "Oh My Posh installed manually to $targetDir" "Green"
+                    return $true
+                } else {
+                    return $false
+                }
+            } catch {
+                Write-ColorOutput "Manual installation failed: $_" "Red"
+                return $false
+            }
         }
     } catch {
         Write-ColorOutput "Failed to install Oh My Posh: $_" "Red"
@@ -446,15 +509,28 @@ try {
 
     # Create a status tracker
     $StatusTracker = [ordered]@{
-        "Nerd Font" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
         "Oh My Posh" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
+        "Nerd Font" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
         "PowerShell Profile" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
         "Windows Terminal" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
         "VS Code" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
         "Cursor" = @{ Status = $false; Message = "Not Started"; Color = "Red" }
     }
 
-    # Step 1: Install Nerd Fonts
+    # Step 1: Install Oh My Posh FIRST (before font installation)
+    $StatusTracker."Oh My Posh".Message = "Installing..."
+    $StatusTracker."Oh My Posh".Color = "Yellow"
+    $ohMyPoshInstalled = Install-OhMyPosh
+    if ($ohMyPoshInstalled) {
+        $StatusTracker."Oh My Posh".Status = $true
+        $StatusTracker."Oh My Posh".Message = "Installed"
+        $StatusTracker."Oh My Posh".Color = "Green"
+    } else {
+        $StatusTracker."Oh My Posh".Message = "Failed"
+        throw "Failed to install Oh My Posh. Aborting."
+    }
+
+    # Step 2: Install Nerd Fonts (after Oh My Posh is installed)
     $StatusTracker."Nerd Font".Message = "Installing..."
     $StatusTracker."Nerd Font".Color = "Yellow"
     $fontInstalled = Install-NerdFont
@@ -466,19 +542,6 @@ try {
         $StatusTracker."Nerd Font".Message = "Warning: Installation issues"
         $StatusTracker."Nerd Font".Color = "Yellow"
         Write-ColorOutput "Warning: Nerd Font installation might have issues. Continuing..." "Yellow"
-    }
-
-    # Step 2: Install Oh My Posh
-    $StatusTracker."Oh My Posh".Message = "Installing..."
-    $StatusTracker."Oh My Posh".Color = "Yellow"
-    $ohMyPoshInstalled = Install-OhMyPosh
-    if ($ohMyPoshInstalled) {
-        $StatusTracker."Oh My Posh".Status = $true
-        $StatusTracker."Oh My Posh".Message = "Installed"
-        $StatusTracker."Oh My Posh".Color = "Green"
-    } else {
-        $StatusTracker."Oh My Posh".Message = "Failed"
-        throw "Failed to install Oh My Posh. Aborting."
     }
 
     # Step 3: Update PowerShell profile
