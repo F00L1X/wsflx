@@ -49,8 +49,55 @@ function Test-CommandExists {
     return [bool](Get-Command -Name $Command -ErrorAction SilentlyContinue)
 }
 
+# Add a cleanup function to remove temporary files
+function Clear-TemporaryFiles {
+    param(
+        [Parameter(Mandatory = $false)]
+        [string[]]$Paths = @(),
+
+        [Parameter(Mandatory = $false)]
+        [switch]$Silent
+    )
+
+    # Common temporary locations used by this script
+    $commonPaths = @(
+        (Join-Path $env:TEMP "NerdFonts"),
+        (Join-Path $env:TEMP "OhMyPosh"),
+        (Join-Path $env:TEMP "style_terminal_w11.ps1")
+    )
+
+    # Combine specified paths with common paths
+    $allPaths = $commonPaths + $Paths | Where-Object { $_ -and (Test-Path $_) }
+
+    foreach ($path in $allPaths) {
+        try {
+            if (Test-Path $path) {
+                # Force close any handles to files
+                [System.GC]::Collect()
+                [System.GC]::WaitForPendingFinalizers()
+
+                # Remove the file or directory
+                if ((Get-Item $path) -is [System.IO.DirectoryInfo]) {
+                    Remove-Item -Path $path -Recurse -Force -ErrorAction Stop
+                } else {
+                    Remove-Item -Path $path -Force -ErrorAction Stop
+                }
+
+                if (-not $Silent) {
+                    Write-ColorOutput "Cleaned up temporary file: $path" "Green"
+                }
+            }
+        } catch {
+            if (-not $Silent) {
+                Write-ColorOutput "Failed to clean up: $path - $_" "Yellow"
+            }
+        }
+    }
+}
+
 function Install-NerdFont {
     Write-ColorOutput "Installing Nerd Fonts..." "Yellow"
+    $tempFolder = Join-Path $env:TEMP "NerdFonts"
 
     try {
         # First make sure Oh My Posh is installed
@@ -69,6 +116,8 @@ function Install-NerdFont {
 
         if ($LASTEXITCODE -eq 0) {
             Write-ColorOutput "Meslo Nerd Font installed successfully using Oh My Posh." "Green"
+            # Cleanup any temp files that might have been created by Oh My Posh
+            Clear-TemporaryFiles -Silent
             return $true
         } else {
             Write-ColorOutput "Oh My Posh font installation returned an error. Exit code: $LASTEXITCODE" "Red"
@@ -78,6 +127,12 @@ function Install-NerdFont {
     catch {
         Write-ColorOutput "Failed during font installation: $_" "Red"
         return $false
+    }
+    finally {
+        # Always make sure to clean up the temporary folder
+        if (Test-Path $tempFolder) {
+            Clear-TemporaryFiles -Paths @($tempFolder)
+        }
     }
 }
 
@@ -284,15 +339,56 @@ function Update-PowerShellProfile {
 
     # Check if Oh My Posh is already configured in the profile
     $profileContent = Get-Content -Path $PROFILE -ErrorAction SilentlyContinue
-    $ohMyPoshConfig = "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
+    $newOhMyPoshConfig = "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
+    $ohMyPoshConfigured = $false
+    $existingTheme = $null
 
-    if ($profileContent -match "oh-my-posh init pwsh") {
-        Write-ColorOutput "Oh My Posh already configured in PowerShell profile." "Cyan"
-    } else {
-        # Add Oh My Posh configuration to the profile
+    # Try to detect existing Oh My Posh configuration and extract theme
+    if ($profileContent) {
+        # Look for the Oh My Posh init line with regex to extract theme
+        $ohMyPoshPattern = 'oh-my-posh\s+init\s+pwsh\s+--config\s+[`"]?\$env:POSH_THEMES_PATH\\([^\.]+)\.omp\.json[`"]?\s+\|\s+Invoke-Expression'
+        if ($profileContent -match $ohMyPoshPattern) {
+            $ohMyPoshConfigured = $true
+            $existingTheme = $matches[1]
+            Write-ColorOutput "Found existing Oh My Posh configuration with theme: $existingTheme" "Cyan"
+
+            # Check if we need to update the theme
+            if ($existingTheme -ne $THEME) {
+                Write-ColorOutput "Updating Oh My Posh theme from '$existingTheme' to '$THEME'..." "Yellow"
+
+                # Replace the existing Oh My Posh configuration with the new one
+                $updatedContent = $profileContent -replace $ohMyPoshPattern, "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
+                Set-Content -Path $PROFILE -Value $updatedContent
+                Write-ColorOutput "Oh My Posh theme updated in PowerShell profile." "Green"
+            } else {
+                Write-ColorOutput "Oh My Posh already configured with theme '$THEME'. No changes needed." "Green"
+            }
+        } elseif ($profileContent -match "oh-my-posh init pwsh") {
+            # Found Oh My Posh but couldn't parse theme, more generic pattern
+            $ohMyPoshConfigured = $true
+            Write-ColorOutput "Found existing Oh My Posh configuration but couldn't detect theme." "Yellow"
+            Write-ColorOutput "Updating to use theme: $THEME" "Yellow"
+
+            # Try to replace the line with a more generic pattern
+            $genericPattern = 'oh-my-posh\s+init\s+pwsh.*\|\s+Invoke-Expression'
+            $updatedContent = $profileContent -replace $genericPattern, $newOhMyPoshConfig
+
+            if ($updatedContent -ne $profileContent) {
+                Set-Content -Path $PROFILE -Value $updatedContent
+                Write-ColorOutput "Oh My Posh configuration updated in PowerShell profile." "Green"
+            } else {
+                # Couldn't replace with regex, just add the new config
+                Add-Content -Path $PROFILE -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
+                Write-ColorOutput "Added new Oh My Posh configuration to PowerShell profile." "Green"
+            }
+        }
+    }
+
+    # If Oh My Posh is not configured yet, add it
+    if (-not $ohMyPoshConfigured) {
         try {
-            Add-Content -Path $PROFILE -Value "`n# Oh My Posh Theme`n$ohMyPoshConfig`n"
-            Write-ColorOutput "Oh My Posh configured in PowerShell profile." "Green"
+            Add-Content -Path $PROFILE -Value "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
+            Write-ColorOutput "Oh My Posh configured in PowerShell profile with theme: $THEME" "Green"
         } catch {
             Write-ColorOutput "Failed to update PowerShell profile: $_" "Red"
             return $false
@@ -659,9 +755,19 @@ try {
     Write-ColorOutput "----------------------------------" "Magenta"
     Write-ColorOutput "Please restart your terminal or PowerShell to see the changes." "Cyan"
 
+    # Final cleanup of all temporary files
+    Write-ColorOutput "`nCleaning up temporary files..." "Yellow"
+    Clear-TemporaryFiles
+    Write-ColorOutput "Cleanup complete." "Green"
+
 } catch {
     Write-ColorOutput "An error occurred: $_" "Red"
     Write-ColorOutput "Please try running the script again or manually complete the remaining steps." "Red"
+
+    # Even if there's an error, try to clean up temporary files
+    Write-ColorOutput "Cleaning up temporary files..." "Yellow"
+    Clear-TemporaryFiles -Silent
+
     exit 1
 }
 
