@@ -1,7 +1,7 @@
 # wsflx
 Windows Scripts by FLX
 
-[![GitHub stars](https://img.shields.io/github/stars/wsflx/terminal-styling?style=social)](https://github.com/wsflx/terminal-styling/stargazers)
+[![GitHub stars](https://img.shields.io/github/stars/F00L1X/wsflx?style=social)](https://github.com/F00L1X/wsflx/stargazers)
 [![PowerShell](https://img.shields.io/badge/PowerShell-5.1%2B-blue)](https://github.com/PowerShell/PowerShell)
 [![Windows](https://img.shields.io/badge/Platform-Windows%207--11-brightgreen)](https://www.microsoft.com/windows)
 [![License](https://img.shields.io/badge/License-MIT-yellow)](LICENSE)
@@ -18,13 +18,13 @@ Automatically style your terminal environment for Windows with Oh My Posh, custo
 
 ##### Option 1: Run directly from GitHub (recommended)
 ```powershell
-irm https://raw.githubusercontent.com/wsflx/terminal-styling/main/style_terminal_w11.ps1 | iex
+irm https://raw.githubusercontent.com/F00L1X/wsflx/main/terminal-styling/style_terminal_w11.ps1 | iex
 ```
 
 ##### Option 2: Clone and run locally
 ```powershell
-git clone https://github.com/wsflx/terminal-styling.git
-cd terminal-styling
+git clone https://github.com/F00L1X/wsflx.git
+cd wsflx/terminal-styling
 Set-ExecutionPolicy Bypass -Scope Process -Force
 .\style_terminal_w11.ps1
 ```
