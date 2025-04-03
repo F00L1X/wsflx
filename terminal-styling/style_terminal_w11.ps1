@@ -1,16 +1,28 @@
 ﻿# Style Terminal for Windows (7-11)
 # This script installs "Oh My Posh" and configures fonts for PowerShell, Windows Terminal, VS Code & Cursor
 # Author: WSFLX
-# Version: 1.0
+# Version: 1.1
+# Compatible with Windows 7, 10, and 11
 # IMPORTANT: This script requires administrative privileges
 
 $ErrorActionPreference = "Stop"
 $THEME = "atomicBit" # or craver or anything, refer to: https://ohmyposh.dev/docs/themes
+
 # Check for administrative privileges
 function Test-Administrator {
     $user = [Security.Principal.WindowsIdentity]::GetCurrent()
     $principal = New-Object Security.Principal.WindowsPrincipal($user)
     return $principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+}
+
+# Function to safely check if a variable exists
+function Test-VariableExists {
+    param (
+        [Parameter(Mandatory=$true)]
+        [string]$Name
+    )
+
+    return [bool](Get-Variable -Name $Name -ErrorAction SilentlyContinue)
 }
 
 # If not running as administrator, provide instructions and exit
@@ -327,8 +339,24 @@ function Update-PowerShellProfile {
     Write-ColorOutput "Configuring PowerShell profile..." "Yellow"
 
     try {
-        # Check if running in PowerShell ISE
-        $inPowerShellISE = $null -ne $psISE
+        # Safe ISE detection that works on Windows 10
+        $inPowerShellISE = $false
+        try {
+            # First check if the variable exists before accessing it
+            if (Test-VariableExists -Name "psISE") {
+                $inPowerShellISE = $null -ne (Get-Variable -Name "psISE" -ValueOnly)
+            }
+            # Secondary detection method based on process name
+            if (-not $inPowerShellISE) {
+                $processName = (Get-Process -Id $PID).ProcessName
+                $inPowerShellISE = $processName -eq "powershell_ise"
+            }
+        }
+        catch {
+            Write-ColorOutput "ISE detection had an issue, assuming regular PowerShell: $_" "Yellow"
+            $inPowerShellISE = $false
+        }
+
         if ($inPowerShellISE) {
             Write-ColorOutput "Detected PowerShell ISE environment." "Cyan"
             Write-ColorOutput "Note: PowerShell ISE does not support ANSI color codes used by Oh My Posh." "Yellow"
@@ -398,21 +426,37 @@ function Update-PowerShellProfile {
         if ($inPowerShellISE) {
             # For PowerShell ISE, add a conditional initialization that only runs in regular PowerShell
             $newOhMyPoshConfig = @"
-# Oh My Posh Theme - Only initialize in regular PowerShell console, not in ISE
-if (`$null -eq `$psISE) {
-    try {
-        oh-my-posh init pwsh --config "`$env:POSH_THEMES_PATH\$($THEME).omp.json" | Invoke-Expression
-    } catch {
-        Write-Host "Oh My Posh initialization failed: `$_" -ForegroundColor Yellow
+# Oh My Posh Theme - Only initialize in compatible terminals, not in ISE
+try {
+    # Check if running in PowerShell ISE
+    `$isInISE = `$false
+    if (Get-Command Get-Variable -ErrorAction SilentlyContinue) {
+        if (Get-Variable -Name psISE -ErrorAction SilentlyContinue) {
+            `$isInISE = `$true
+        }
     }
-} else {
-    # PowerShell ISE doesn't support ANSI color codes used by Oh My Posh
-    Write-Host "Oh My Posh is disabled in PowerShell ISE" -ForegroundColor Cyan
+
+    if (-not `$isInISE) {
+        # Only initialize Oh My Posh in regular console
+        oh-my-posh init pwsh --config "`$env:POSH_THEMES_PATH\$($THEME).omp.json" | Invoke-Expression
+    } else {
+        # PowerShell ISE doesn't support ANSI color codes used by Oh My Posh
+        Write-Host "Oh My Posh is disabled in PowerShell ISE" -ForegroundColor Cyan
+    }
+} catch {
+    Write-Host "Oh My Posh initialization failed: `$_" -ForegroundColor Yellow
 }
 "@
         } else {
-            # For regular PowerShell or Windows Terminal
-            $newOhMyPoshConfig = "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
+            # For regular PowerShell or Windows Terminal - add safeguard
+            $newOhMyPoshConfig = @"
+# Oh My Posh Theme
+try {
+    oh-my-posh init pwsh --config "`$env:POSH_THEMES_PATH\$($THEME).omp.json" | Invoke-Expression
+} catch {
+    Write-Host "Oh My Posh initialization failed: `$_" -ForegroundColor Yellow
+}
+"@
         }
 
         $ohMyPoshConfigured = $false
@@ -428,34 +472,34 @@ if (`$null -eq `$psISE) {
                 Write-ColorOutput "Found existing Oh My Posh configuration with theme: $existingTheme" "Cyan"
 
                 # Check if we need to update the theme
-                if ($existingTheme -ne $THEME) {
-                    Write-ColorOutput "Updating Oh My Posh theme from '$existingTheme' to '$THEME'..." "Yellow"
+                if ($existingTheme -ne $THEME -or $inPowerShellISE) {
+                    if ($existingTheme -ne $THEME) {
+                        Write-ColorOutput "Updating Oh My Posh theme from '$existingTheme' to '$THEME'..." "Yellow"
+                    }
 
                     # Replace the existing Oh My Posh configuration with the new one
-                    if ($inPowerShellISE) {
-                        # If in ISE and updating theme, replace entire section with conditional
-                        $updatedContent = $profileContent -replace "(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)", "# Oh My Posh Theme`n$newOhMyPoshConfig"
-                        if ($updatedContent -eq $profileContent) {
-                            # If replacement didn't work, try simpler approach
-                            $updatedContent = $profileContent -replace $ohMyPoshPattern, "if (`$null -eq `$psISE) { oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression }"
-                        }
-                    } else {
-                        $updatedContent = $profileContent -replace $ohMyPoshPattern, "oh-my-posh init pwsh --config `"`$env:POSH_THEMES_PATH\$($THEME).omp.json`" | Invoke-Expression"
+                    $updatedContent = $profileContent
+
+                    # First try to update the entire Oh My Posh section
+                    $sectionPattern = "(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)"
+                    if ($profileContent -match $sectionPattern) {
+                        $updatedContent = $profileContent -replace $sectionPattern, "# Oh My Posh Theme`n$newOhMyPoshConfig"
+                    }
+                    # If that didn't work, try to update just the init line
+                    elseif ($updatedContent -eq $profileContent) {
+                        $updatedContent = $profileContent -replace $ohMyPoshPattern, ($newOhMyPoshConfig -replace "# Oh My Posh Theme`n", "")
+                    }
+
+                    # If both previous attempts failed, append the new config
+                    if ($updatedContent -eq $profileContent) {
+                        Write-ColorOutput "Could not update existing Oh My Posh configuration, will append new one" "Yellow"
+                        $updatedContent = $profileContent + "`n# Oh My Posh Theme`n$newOhMyPoshConfig`n"
                     }
 
                     Set-Content -Path $profilePath -Value $updatedContent -Force
                     Write-ColorOutput "Oh My Posh theme updated in PowerShell profile." "Green"
                 } else {
                     Write-ColorOutput "Oh My Posh already configured with theme '$THEME'. No changes needed." "Green"
-
-                    # Even if the theme is the same, update the config for ISE detection
-                    if ($inPowerShellISE) {
-                        $updatedContent = $profileContent -replace "(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)", "# Oh My Posh Theme`n$newOhMyPoshConfig"
-                        if ($updatedContent -ne $profileContent) {
-                            Set-Content -Path $profilePath -Value $updatedContent -Force
-                            Write-ColorOutput "Updated Oh My Posh configuration for ISE compatibility." "Green"
-                        }
-                    }
                 }
             } elseif ($profileContent -match "oh-my-posh init pwsh") {
                 # Found Oh My Posh but couldn't parse theme, more generic pattern
@@ -464,8 +508,8 @@ if (`$null -eq `$psISE) {
                 Write-ColorOutput "Updating to use theme: $THEME" "Yellow"
 
                 # Try to replace the line with a more generic pattern
-                $genericPattern = 'oh-my-posh\s+init\s+pwsh.*\|\s+Invoke-Expression'
-                $updatedContent = $profileContent -replace $genericPattern, $newOhMyPoshConfig
+                $genericPattern = '(?ms)# Oh My Posh Theme.*?(?=\r?\n[^#]|\Z)|oh-my-posh\s+init\s+pwsh.*\|\s+Invoke-Expression'
+                $updatedContent = $profileContent -replace $genericPattern, "# Oh My Posh Theme`n$newOhMyPoshConfig"
 
                 if ($updatedContent -ne $profileContent) {
                     Set-Content -Path $profilePath -Value $updatedContent -Force

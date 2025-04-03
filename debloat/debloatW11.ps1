@@ -31,8 +31,8 @@ FFFFFFFFFFF                000000000          000000000     111111111111xxxxxxx 
 
 # Ask for elevated permissions if required
 If (!([Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]"Administrator")) {
-    Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
-    Exit
+	Start-Process powershell.exe "-NoProfile -ExecutionPolicy Bypass -File `"$PSCommandPath`"" -Verb RunAs
+	Exit
 }
 
 # Error handling settings
@@ -305,9 +305,9 @@ public static uint GetTaskbarProcessId() { uint pid; GetWindowThreadProcessId(Ge
       try {
           $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
           schtasks /create /s $env:COMPUTERNAME /tn "RunExplorer" /F /sc once /tr "Explorer.exe" /st 23:59 /ru $currentUser
-          schtasks /run /tn "RunExplorer"
-          schtasks /delete /tn "RunExplorer" /f
-      }
+      schtasks /run /tn "RunExplorer"
+      schtasks /delete /tn "RunExplorer" /f
+  }
       catch {
           Write-DebloatLog -Message "Failed to restart Explorer via scheduled task. Trying alternative method." -Type Warning
           Start-Process -FilePath "explorer.exe"
@@ -622,11 +622,11 @@ try {
         Write-DebloatLog -Message "Unable to determine current user's SID, some operations may fail" -Type Warning
     }
 
-    ###################################################
-    # REMOVE BLOATWARE                                #
-    ###################################################
+###################################################
+# REMOVE BLOATWARE                                #
+###################################################
 
-    $Bloatware = @(
+$Bloatware = @(
         # Default Windows 10/11 AppX apps
         "Microsoft.3DBuilder"
         # "Microsoft.AppConnector"
@@ -650,7 +650,7 @@ try {
         "Microsoft.MicrosoftPowerBIForWindows"
         "Microsoft.MSPaint"               # Creators Update apps
         "Microsoft.MicrosoftSolitaireCollection"
-        # "Microsoft.MicrosoftStickyNotes"
+       # "Microsoft.MicrosoftStickyNotes"
         "Microsoft.MinecraftUWP"
         "Microsoft.NetworkSpeedTest"
         "Microsoft.News"
@@ -658,29 +658,29 @@ try {
         "Microsoft.Office.Sway"
         "Microsoft.Office.OneNote"
         "Microsoft.OneConnect"
-        # "Microsoft.Paint"
+       # "Microsoft.Paint"
         "Microsoft.People"
         "Microsoft.Print3D"
         "Microsoft.SkypeApp"
-        # "Microsoft.ScreenSketch"
+       # "Microsoft.ScreenSketch"
         "Microsoft.StorePurchaseApp"
         "Microsoft.Todos"
-        # "Microsoft.WindowsAlarms"
+       # "Microsoft.WindowsAlarms"
         "Microsoft.windowscommunicationsapps"
         "Microsoft.WindowsFeedbackHub"
         "Microsoft.WindowsMaps"
         "Microsoft.Windows.Photos"
         "Microsoft.WindowsSoundRecorder"
-        # "Microsoft.WindowsAlarms"
-        # "Microsoft.WindowsCalculator"
-        # "Microsoft.WindowsCamera"
+       # "Microsoft.WindowsAlarms"
+       # "Microsoft.WindowsCalculator"
+       # "Microsoft.WindowsCamera"
         "Microsoft.WindowsPhone"
         "Microsoft.WindowsReadingList"        # Redstone apps
         "Microsoft.WindowsSoundRecorder"
         "Microsoft.Xbox.TCUI"
         "Microsoft.XboxApp"                   # Redstone apps
-        # "Microsoft.XboxGameOverlay"          # Redstone apps
-        # "Microsoft.XboxGamingOverlay"        # Redstone apps
+       # "Microsoft.XboxGameOverlay"          # Redstone apps
+       # "Microsoft.XboxGamingOverlay"        # Redstone apps
         "Microsoft.XboxSpeechToTextOverlay"
         "Microsoft.XboxIdentityProvider"
         "Microsoft.XboxSpeechToTextOverlay"
@@ -853,21 +853,21 @@ try {
     # Prevent apps from reinstalling
     Write-DebloatLog -Message "Setting registry keys to prevent apps from reinstalling..." -Type Info
 
-    $cdm = @(
-        "ContentDeliveryAllowed"
-        "FeatureManagementEnabled"
-        "OemPreInstalledAppsEnabled"
-        "PreInstalledAppsEnabled"
-        "PreInstalledAppsEverEnabled"
-        "SilentInstalledAppsEnabled"
-        "SubscribedContent-314559Enabled"
-        "SubscribedContent-338387Enabled"
-        "SubscribedContent-338388Enabled"
-        "SubscribedContent-338389Enabled"
-        "SubscribedContent-338393Enabled"
-        "SubscribedContentEnabled"
-        "SystemPaneSuggestionsEnabled"
-    )
+$cdm = @(
+    "ContentDeliveryAllowed"
+    "FeatureManagementEnabled"
+    "OemPreInstalledAppsEnabled"
+    "PreInstalledAppsEnabled"
+    "PreInstalledAppsEverEnabled"
+    "SilentInstalledAppsEnabled"
+    "SubscribedContent-314559Enabled"
+    "SubscribedContent-338387Enabled"
+    "SubscribedContent-338388Enabled"
+    "SubscribedContent-338389Enabled"
+    "SubscribedContent-338393Enabled"
+    "SubscribedContentEnabled"
+    "SystemPaneSuggestionsEnabled"
+)
 
     $cdmPath = "HKCU:\Software\Microsoft\Windows\CurrentVersion\ContentDeliveryManager"
     foreach ($key in $cdm) {
@@ -877,9 +877,9 @@ try {
     Set-RegistryValueSafely -Path "HKLM:\SOFTWARE\Policies\Microsoft\WindowsStore" -Name "AutoDownload" -Value 2 -Type DWord
     Set-RegistryValueSafely -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\CloudContent" -Name "DisableWindowsConsumerFeatures" -Value 1 -Type DWord
 
-    ###################################################
+###################################################
     # SERVICE TWEAKS                                  #
-    ###################################################
+###################################################
 
     Write-DebloatLog -Message "Applying service tweaks..." -Type Info
 
@@ -895,24 +895,24 @@ try {
         }
     }
 
-    # Disable Windows Update automatic restart
+# Disable Windows Update automatic restart
     Set-RegistryValueSafely -Path "HKLM:\Software\Microsoft\WindowsUpdate\UX\Settings" -Name "UxOption" -Value 1 -Type DWord
 
-    # Stop and disable Home Groups services
+# Stop and disable Home Groups services
     try {
         Stop-Service "HomeGroupListener" -Force -ErrorAction SilentlyContinue
-        Set-Service "HomeGroupListener" -StartupType Disabled -ErrorAction SilentlyContinue
+Set-Service "HomeGroupListener" -StartupType Disabled -ErrorAction SilentlyContinue
         Stop-Service "HomeGroupProvider" -Force -ErrorAction SilentlyContinue
-        Set-Service "HomeGroupProvider" -StartupType Disabled -ErrorAction SilentlyContinue
+Set-Service "HomeGroupProvider" -StartupType Disabled -ErrorAction SilentlyContinue
         Write-DebloatLog -Message "Disabled Home Groups services" -Type Success
     }
     catch {
         Write-DebloatLog -Message "Failed to disable Home Groups services: $_" -Type Error
     }
 
-    ###################################################
+###################################################
     # DISABLE ONEDRIVE                                #
-    ###################################################
+###################################################
 
     Write-DebloatLog -Message "Disabling OneDrive..." -Type Info
     Set-RegistryValueSafely -Path "HKLM:\SOFTWARE\Policies\Microsoft\Windows\OneDrive" -Name "DisableFileSyncNGSC" -Value 1 -Type DWord
