@@ -1,7 +1,7 @@
 ﻿##############################################################
-# Date: [Current Date]
-# Author: Felix M. Schneider
-# Updated by: [Your Name]
+# Date: 04.04.2025
+# Author: F00l1x
+# Updated by: F00l1x
 # ScriptVersion: 1.0
 # Description: Script to customize Windows 11 UI to user preferences
 ##############################################################
@@ -242,7 +242,7 @@ https://superuser.com/questions/511914/why-does-explorer-restart-automatically-w
 
 .NOTES
  Name:    Check_Explorer.ps1
- Author:  Hugo Bergmann // Felix M. Schneider
+ Author:  Hugo Bergmann // F00l1x
  Date:    2019-03-15
 #>
 
@@ -368,7 +368,7 @@ https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-
 
 .NOTES
  Name:    Check_Explorer.ps1
- Author:  Felix M. Schneider // Hugo Bergmann // Stjepan Kikic
+ Author:  F00l1x // Hugo Bergmann // Stjepan Kikic
  Date:    2019-03-15
 #>
 

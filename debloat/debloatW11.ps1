@@ -1,13 +1,13 @@
 ##############################################################
-# Date 17.09.2021 (Updated: [Current Date])
-# Author Felix M. Schneider
-# Updated by [Your Name]
+# Date 17.09.2021 (Updated: 04.04.2025)
+# Author F00l1x
+# Updated by F00l1x
 # ScriptVersion 2.0
 # Description
 # Script to Debloat and Tweak Windows 11 with improved error handling and organization
 # History
 # 17.09.2021 - Initial version
-# [Current Date] - Refactored code, improved error handling, enhanced UI
+# 04.04.2025 - Refactored code, improved error handling, enhanced UI
 ##############################################################
 
 <#
@@ -65,12 +65,13 @@ function Write-DebloatLog {
     }
 
     Write-Host "$Prefix$Message" -ForegroundColor $Color
+    $global:ErrorOccurred | Out-Null;
 
     # Log to file if needed
     # Add-Content -Path "$env:TEMP\DebloatW11_Log.txt" -Value "$(Get-Date) - $Prefix$Message"
 }
 
-function Take-Ownership
+function Set-Ownership
 {
 <#
 .SYNOPSIS
@@ -92,13 +93,13 @@ function Take-Ownership
  Causes the function to parse through the Path recursively.
 
 .INPUTS
- None. You cannot pipe objects to Take-Ownership
+ None. You cannot pipe objects to Set-Ownership
 
 .OUTPUTS
  None
 
 .NOTES
- Name:    Take-Ownership.ps1
+ Name:    Set-Ownership.ps1
  Author:  Jason Eberhardt
  Date:    2017-07-20
 #>
@@ -269,7 +270,7 @@ https://superuser.com/questions/511914/why-does-explorer-restart-automatically-w
 
 .NOTES
  Name:    Check_Explorer.ps1
- Author:  Hugo Bergmann // Felix M. Schneider
+ Author:  Hugo Bergmann // F00l1x
  Date:    2019-03-15
 #>
 
@@ -395,7 +396,7 @@ https://docs.microsoft.com/en-us/previous-versions/windows/internet-explorer/ie-
 
 .NOTES
  Name:    Check_Explorer.ps1
- Author:  Felix M. Schneider // Hugo Bergmann // Stjepan Kikic
+ Author:  F00l1x // Hugo Bergmann // Stjepan Kikic
  Date:    2019-03-15
 #>
 
@@ -786,7 +787,7 @@ $Bloatware = @(
     }
 
     # Show dialog to let user choose additional bloatware
-    $boxreturn = Show-MessageBox -Title "Windows 11 Debloat" -Text "Do you want to manually select additional bloatware to remove?`n`nNOTE: A standard set of bloatware will be removed automatically." -Style Question -Buttons Yes_No -Topmost -NumericReturn
+    $boxreturn = Show-MessageBox -Title "Windows 11 Debloat" -Text "Do you want to manually select additional bloatware to remove?`n`nNOTE: A standard set of bloatware will be removed automatically." -Style Question -Buttons Yes_No -Topmost  -NumericReturn
 
     if ($boxreturn -eq 6) { # User clicked Yes
         try {
@@ -924,7 +925,7 @@ Set-Service "HomeGroupProvider" -StartupType Disabled -ErrorAction SilentlyConti
         Write-DebloatLog -Message "Some operations encountered warnings or errors. Check the log for details." -Type Warning
     }
 
-    Write-DebloatLog -Message "Note: To customize Windows 11 UI (context menus, taskbar, explorer view, etc.), run the tweakW11.ps1 script in the gui-tweaks folder." -Type Info
+    Write-DebloatLog -Message "Note: To customize Windows 11 UI (context menus, taskbar, explorer view, etc.), run the set-tweakW11.ps1 script in the ui-tweaks folder." -Type Info
 
     $bResult = Show-MessageBox -Text "Reboot $($env:COMPUTERNAME) to apply all changes?" -Title "Windows 11 Debloat - Restart Required" -Buttons Yes_No -Topmost -Style Question -NumericReturn
     if ($bResult -eq 6) {

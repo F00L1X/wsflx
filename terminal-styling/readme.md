@@ -1,8 +1,19 @@
-﻿# Terminal Styling for Windows
+﻿# 🎨 Terminal Styling for Windows
 
 A PowerShell script that automatically styles your terminal environment for Windows with Oh My Posh, custom fonts, and configuration for popular terminals and IDEs.
 
-![Terminal Styling Preview](https://user-images.githubusercontent.com/your-image-url-here.png)
+[↩️ Back to Main Readme](../README.md)
+
+## 📋 Table of Contents
+- [What This Script Does](#-what-this-script-does)
+- [Preview](#preview)
+- [Features](#-features)
+- [Configures These Components](#-configures-these-components)
+- [Requirements](#-requirements)
+- [Installation](#-installation)
+- [Troubleshooting](#-troubleshooting)
+- [Credits](#-credits)
+- [License](#-license)
 
 ## ✨ What This Script Does
 
@@ -17,7 +28,10 @@ This script automates the setup of a beautiful and highly functional terminal en
 
 After running, you'll have a stylish, feature-rich terminal environment ready for productive coding!
 
-## 📋 Features
+## 📸 Preview
+![preview](pwsh_ise_vscode_atomicBit.png)
+
+## 🚀 Features
 
 - ✅ **Fully Automated** - No manual steps required
 - ✅ **Cross-Version Compatible** - Works on Windows 7, 8, 10, and 11
@@ -28,7 +42,7 @@ After running, you'll have a stylish, feature-rich terminal environment ready fo
 - ✅ **Always Latest Version** - Dynamically fetches the latest Nerd Font release
 - ✅ **Beautiful Status Dashboard** - Visualizes installation progress and success
 
-## 🧰 Configures These Components
+## ⚙️ Configures These Components
 
 | Component | What Gets Configured |
 |-----------|----------------------|
@@ -39,14 +53,31 @@ After running, you'll have a stylish, feature-rich terminal environment ready fo
 | **VS Code** | Updates integrated terminal settings to use Nerd Fonts |
 | **Cursor** | Updates integrated terminal settings to use Nerd Fonts |
 
-## 🔍 Requirements
+## 📋 Requirements
 
 - Windows 7 or higher
 - PowerShell 5.1 or higher
 - Internet connection (for downloading fonts and Oh My Posh)
 - Administrator privileges (recommended but not required)
 
-## 💡 Troubleshooting
+## 💻 Installation
+
+### Option 1: Direct download and run (recommended)
+
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/terminal-styling/style_terminal_w11.ps1" -OutFile "$env:TEMP\style_terminal_w11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\style_terminal_w11.ps1"
+```
+
+### Option 2: Clone repository and run locally
+
+```powershell
+git clone https://github.com/F00L1X/wsflx.git
+cd wsflx/terminal-styling
+Set-ExecutionPolicy Bypass -Scope Process -Force
+.\style_terminal_w11.ps1
+```
+
+## 🔍 Troubleshooting
 
 If you encounter any issues:
 
@@ -61,6 +92,6 @@ If you encounter any issues:
 - [**JanDeDobbeleer**](https://github.com/JanDeDobbeleer) - Creator of Oh My Posh
 - [**F00L1X**](https://github.com/F00L1X/wsflx) - Creator of this script
 
-## 📜 License
+## 📄 License
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+This project is licensed under the MIT License - see the [LICENSE](../LICENSE) file for details.

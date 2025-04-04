@@ -541,7 +541,6 @@ function Update-ProfileContent {
 
         # Process the file
         $newContent = New-Object System.Collections.ArrayList
-        $inOhMyPoshSection = $false
         $ohMyPoshSectionFound = $false
         $skipLinesUntil = -1
 
@@ -558,7 +557,6 @@ function Update-ProfileContent {
                 $line -match "oh-my-posh init pwsh") {
 
                 $ohMyPoshSectionFound = $true
-                $inOhMyPoshSection = $true
 
                 # Find the end of the Oh My Posh section
                 $sectionEnd = $i
@@ -584,7 +582,6 @@ function Update-ProfileContent {
                 # Add a blank line after the section
                 [void]$newContent.Add("")
 
-                $inOhMyPoshSection = $false
             }
             else {
                 # Add the line as-is
@@ -754,7 +751,6 @@ function Update-PowerShellProfile {
 
                     # For other profile types, try to derive based on naming conventions
                     $profileDir = Split-Path -Parent $PROFILE
-                    $fileName = Split-Path -Leaf $PROFILE
 
                     switch ($ProfileType) {
                         "CurrentUserAllHosts" {
@@ -1102,7 +1098,6 @@ try {
             # Create new content excluding any existing prompt function
             $newIseContent = New-Object System.Collections.ArrayList
             $inPromptFunction = $false
-            $promptFunctionFound = $false
 
             if ($null -ne $iseProfileLines -and $iseProfileLines.Count -gt 0) {
                 for ($i = 0; $i -lt $iseProfileLines.Count; $i++) {
@@ -1111,7 +1106,6 @@ try {
                     # Check for the start of a prompt function
                     if ($line -match "function\s+global:prompt\s*\{") {
                         $inPromptFunction = $true
-                        $promptFunctionFound = $true
                         continue
                     }
 

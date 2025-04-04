@@ -1,4 +1,4 @@
-# wsflx
+# 🚀 wsflx
 Windows Scripts by FLX
 
 [![GitHub stars](https://img.shields.io/github/stars/F00L1X/wsflx?style=social)](https://github.com/F00L1X/wsflx/stargazers)
@@ -8,7 +8,7 @@ Windows Scripts by FLX
 
 A collection of PowerShell scripts to set up, maintain, clean, and optimize Windows operating systems.
 
-## Table of Contents
+## 📋 Table of Contents
 - [Available Scripts](#available-scripts)
   - [🎨 Terminal Styling for Windows](#-terminal-styling-for-windows)
   - [🧹 Windows 11 Debloat Script](#-windows-11-debloat-script)
@@ -17,7 +17,7 @@ A collection of PowerShell scripts to set up, maintain, clean, and optimize Wind
 - [Contributions](#-contributions)
 - [License](#-license)
 
-## Available Scripts
+## 🔧 Available Scripts
 
 ### 🎨 Terminal Styling for Windows
 
@@ -37,7 +37,7 @@ Copy & paste it to your admin terminal:
 git clone https://github.com/F00L1X/wsflx.git; cd wsflx/terminal-styling; Set-ExecutionPolicy Bypass -Scope Process -Force; .\style_terminal_w11.ps1
 ```
 
-[Learn more about Terminal Styling](terminal-styling/readme.md)
+[📚 Learn more about Terminal Styling](terminal-styling/readme.md)
 
 ### 🧹 Windows 11 Debloat Script
 
@@ -57,7 +57,7 @@ Copy & paste it to your admin terminal:
 git clone https://github.com/F00L1X/wsflx.git; cd wsflx/debloat; Set-ExecutionPolicy Bypass -Scope Process -Force; .\debloatW11.ps1
 ```
 
-[Learn more about Windows 11 Debloat](debloat/readme.md)
+[📚 Learn more about Windows 11 Debloat](debloat/readme.md)
 
 ### 🖌️ Windows 11 UI Tweaks
 
@@ -68,30 +68,30 @@ Customize the Windows 11 UI with a more efficient and user-friendly interface, i
 ##### Option 1: Download and run (recommended)
 Copy & paste it to your admin terminal:
 ```powershell
-Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/gui-tweaks/tweakW11.ps1" -OutFile "$env:TEMP\tweakW11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\tweakW11.ps1"
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/ui-tweaks/set-tweakW11.ps1" -OutFile "$env:TEMP\set-tweakW11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\set-tweakW11.ps1"
 ```
 
 ##### Option 2: Clone and run locally
 Copy & paste it to your admin terminal:
 ```powershell
-git clone https://github.com/F00L1X/wsflx.git; cd wsflx/gui-tweaks; Set-ExecutionPolicy Bypass -Scope Process -Force; .\tweakW11.ps1
+git clone https://github.com/F00L1X/wsflx.git; cd wsflx/ui-tweaks; Set-ExecutionPolicy Bypass -Scope Process -Force; .\set-tweakW11.ps1
 ```
 
-[Learn more about Windows 11 UI Tweaks](gui-tweaks/readme.md)
+[📚 Learn more about Windows 11 UI Tweaks](ui-tweaks/readme.md)
 
 ## 🔜 Coming Soon
 
 More scripts for:
-- System cleanup and optimization
-- Development environment setup
-- Windows customization
-- Productivity tools installation
+- 🧰 System cleanup and optimization
+- 👨‍💻 Development environment setup
+- 🎨 Windows customization
+- 🛠️ Productivity tools installation
 
 ## 🙌 Contributions
 
 Contributions are welcome! Please feel free to submit a Pull Request.
 
-## 📜 License
+## 📄 License
 
 This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
 
