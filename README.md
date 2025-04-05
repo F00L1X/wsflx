@@ -13,6 +13,7 @@ A collection of PowerShell scripts to set up, maintain, clean, and optimize Wind
   - [🎨 Terminal Styling for Windows](#-terminal-styling-for-windows)
   - [🧹 Windows 11 Debloat Script](#-windows-11-debloat-script)
   - [🖌️ Windows 11 UI Tweaks](#-windows-11-ui-tweaks)
+  - [🗑️ GitHub Artifacts Manager](#-github-artifacts-manager)
 - [Coming Soon](#-coming-soon)
 - [Contributions](#-contributions)
 - [License](#-license)
@@ -78,6 +79,26 @@ git clone https://github.com/F00L1X/wsflx.git; cd wsflx/ui-tweaks; Set-Execution
 ```
 
 [📚 Learn more about Windows 11 UI Tweaks](ui-tweaks/readme.md)
+
+### 🗑️ GitHub Artifacts Manager
+
+Manage GitHub workflow artifacts with a modern dark-themed UI. Download or delete artifacts across all your repositories with ease.
+
+#### 🚀 Quick Start
+
+##### Option 1: Download and run (recommended)
+Copy & paste it to your admin terminal:
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/git/manage-git-artifacts.ps1" -OutFile "$env:TEMP\manage-git-artifacts.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\manage-git-artifacts.ps1"
+```
+
+##### Option 2: Clone and run locally
+Copy & paste it to your admin terminal:
+```powershell
+git clone https://github.com/F00L1X/wsflx.git; cd wsflx/git; Set-ExecutionPolicy Bypass -Scope Process -Force; .\manage-git-artifacts.ps1
+```
+
+[📚 Learn more about GitHub Artifacts Manager](git/readme.md)
 
 ## 🔜 Coming Soon
 
