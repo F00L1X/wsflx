@@ -142,16 +142,60 @@ using System.Runtime.InteropServices;
 
   Process {
     $Item=Get-Item $Path
-    Write-Host "Giving current process token ownership rights"
+    Write-TweakLog -Message "Giving current process token ownership rights" -Type Info
     Add-Type $AdjustTokenPrivileges -PassThru > $null
     [void][TokenManipulator]::AddPrivilege("SeTakeOwnershipPrivilege")
     [void][TokenManipulator]::AddPrivilege("SeRestorePrivilege")
 
     # Change ownership
-    $Account=$User.Split("\")
-    if ($Account.Count -eq 1) { $Account+=$Account[0]; $Account[0]=$env:COMPUTERNAME }
-    $Owner=New-Object System.Security.Principal.NTAccount($Account[0],$Account[1])
-    Write-Host "Change ownership to '$($Account[0])\$($Account[1])'"
+    # Special handling for well-known accounts
+    # Check if user is trying to use SYSTEM account in various formats
+    if ($User -eq "NT AUTHORITY\SYSTEM" -or $User -eq "SYSTEM" -or $User -like "*\SYSTEM" -or $User -eq "PC\SYSTEM") {
+        try {
+            $Owner = New-Object System.Security.Principal.NTAccount("NT AUTHORITY", "SYSTEM")
+            Write-TweakLog -Message "Change ownership to 'NT AUTHORITY\SYSTEM'" -Type Info
+        }
+        catch {
+            Write-TweakLog -Message "Failed to create SYSTEM account, trying alternative format" -Type Warning
+            try {
+                $Owner = New-Object System.Security.Principal.NTAccount("SYSTEM")
+            }
+            catch {
+                Write-TweakLog -Message "Failed with SYSTEM, trying LocalSystem" -Type Warning
+                $Owner = New-Object System.Security.Principal.NTAccount("LocalSystem")
+            }
+        }
+    }
+    elseif ($User -eq "BUILTIN\Administrators" -or $User -eq "Administrators" -or $User -like "*\Administrators") {
+        try {
+            $Owner = New-Object System.Security.Principal.NTAccount("BUILTIN", "Administrators")
+            Write-TweakLog -Message "Change ownership to 'BUILTIN\Administrators'" -Type Info
+        }
+        catch {
+            Write-TweakLog -Message "Failed to create Administrators account, trying alternative format" -Type Warning
+            $Owner = New-Object System.Security.Principal.NTAccount("Administrators")
+        }
+    }
+    else {
+        # Handle different user account formats
+        if ($User -match "^(.+)\\(.+)$") {
+            $Account = @($Matches[1], $Matches[2])
+        }
+        else {
+            # If no domain specified, use local computer name
+            $Account = @($env:COMPUTERNAME, $User)
+        }
+        
+        try {
+            $Owner = New-Object System.Security.Principal.NTAccount($Account[0], $Account[1])
+            Write-TweakLog -Message "Change ownership to '$($Account[0])\$($Account[1])'" -Type Info
+        }
+        catch {
+            # If NTAccount creation fails, try with just username
+            Write-TweakLog -Message "Failed to create NTAccount with domain, trying local account" -Type Warning
+            $Owner = New-Object System.Security.Principal.NTAccount($User)
+        }
+    }
 
     $Provider=$Item.PSProvider.Name
     if ($Item.PSIsContainer) {
@@ -170,9 +214,14 @@ using System.Runtime.InteropServices;
                        $Item=$rootKey.OpenSubKey($Key,[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[System.Security.AccessControl.RegistryRights]::TakeOwnership) }
         default { throw "Unknown provider:  $($Item.PSProvider.Name)" }
       }
-      $ACL.SetOwner($Owner)
-      Write-Host "Setting owner on $Path"
-      $Item.SetAccessControl($ACL)
+      try {
+          $ACL.SetOwner($Owner)
+          Write-TweakLog -Message "Setting owner on $Path" -Type Info
+          $Item.SetAccessControl($ACL)
+      }
+      catch {
+          Write-TweakLog -Message "Failed to set owner: $_" -Type Warning
+      }
       if ($Provider -eq "Registry") { $Item.Close() }
 
       if ($Recurse.IsPresent) {
@@ -199,9 +248,14 @@ using System.Runtime.InteropServices;
                            $Item=$rootKey.OpenSubKey($Key,[Microsoft.Win32.RegistryKeyPermissionCheck]::ReadWriteSubTree,[System.Security.AccessControl.RegistryRights]::TakeOwnership) }
             default { throw "Unknown provider:  $($Item.PSProvider.Name)" }
           }
-          $ACL.SetOwner($Owner)
-          Write-Host "Setting owner on $($Item.Name)"
-          $Item.SetAccessControl($ACL)
+          try {
+              $ACL.SetOwner($Owner)
+              Write-TweakLog -Message "Setting owner on $($Item.Name)" -Type Info
+              $Item.SetAccessControl($ACL)
+          }
+          catch {
+              Write-TweakLog -Message "Failed to set owner on $($Item.Name): $_" -Type Warning
+          }
           if ($Provider -eq "Registry") { $Item.Close() }
         }
       } # Recursion
@@ -213,9 +267,14 @@ using System.Runtime.InteropServices;
         "Registry"   { throw "You cannot set ownership on a registry value"  }
         default { throw "Unknown provider:  $($Item.PSProvider.Name)" }
       }
-      $ACL.SetOwner($Owner)
-      Write-Host "Setting owner on $Path"
-      $Item.SetAccessControl($ACL)
+      try {
+          $ACL.SetOwner($Owner)
+          Write-TweakLog -Message "Setting owner on $Path" -Type Info
+          $Item.SetAccessControl($ACL)
+      }
+      catch {
+          Write-TweakLog -Message "Failed to set owner: $_" -Type Warning
+      }
     }
   }
 }
@@ -469,15 +528,28 @@ function Set-RegistryValueSafely {
 # Function to get current user's SID
 function Get-CurrentUserSID {
     try {
-        $sid = (Get-CimInstance -ClassName Win32_UserAccount | Where-Object -FilterScript {$_.Name -eq $env:USERNAME}).SID
-        if ($sid) {
-            return $sid
+        # First try using Get-LocalUser (most reliable for Windows 11)
+        $localUser = Get-LocalUser -Name $env:USERNAME -ErrorAction SilentlyContinue
+        if ($localUser -and $localUser.SID) {
+            return $localUser.SID.Value
         }
-        else {
-            # Alternative method if the first fails
-            $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        
+        # Second method using CIM query with proper syntax
+        $userAccount = Get-CimInstance -Query "Select * from Win32_UserAccount WHERE Name='$env:USERNAME'" -ErrorAction SilentlyContinue
+        if ($userAccount -and $userAccount.SID) {
+            return $userAccount.SID
+        }
+        
+        # Third method using .NET (most compatible)
+        $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
+        if ($currentUser -and $currentUser.User) {
             return $currentUser.User.Value
         }
+        
+        # Final fallback using NTAccount translation
+        $objUser = New-Object System.Security.Principal.NTAccount($env:USERDOMAIN, $env:USERNAME)
+        $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
+        return $strSID.Value
     }
     catch {
         Write-TweakLog -Message "Failed to get current user SID: $_" -Type Error
@@ -505,18 +577,55 @@ try {
 
     Write-TweakLog -Message "Applying Windows 11 GUI tweaks..." -Type Info
 
-    # Old Context Menu
+    # Old Context Menu - Multiple approaches
+    Write-TweakLog -Message "Setting Windows 10-style context menu..." -Type Info
+    
+    # Method 1: Registry rename approach (requires elevated permissions)
     $NewContextMenueKeyRenamed = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\-{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}"
     $NewContextMenueKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}"
 
+    $contextMenuSet = $false
+    
     if (Test-Path $NewContextMenueKeyRenamed) {
         Write-TweakLog -Message "Context menu key already renamed" -Type Info
+        $contextMenuSet = $true
     }
     else {
         try {
-            Write-TweakLog -Message "Setting Windows 10-style context menu..." -Type Info
-
-            Take-Ownership -Path $NewContextMenueKey -User $env:USERNAME -Recurse
+            # Try multiple approaches for taking ownership
+            $ownershipSet = $false
+            
+            # Try with full domain\username format first
+            try {
+                $fullUserName = "$env:USERDOMAIN\$env:USERNAME"
+                Take-Ownership -Path $NewContextMenueKey -User $fullUserName -Recurse
+                $ownershipSet = $true
+            }
+            catch {
+                Write-TweakLog -Message "Failed with domain\username format, trying alternative methods" -Type Warning
+            }
+            
+            # If that fails, try with BUILTIN\Administrators
+            if (-not $ownershipSet) {
+                try {
+                    Take-Ownership -Path $NewContextMenueKey -User "BUILTIN\Administrators" -Recurse
+                    $ownershipSet = $true
+                }
+                catch {
+                    Write-TweakLog -Message "Failed with BUILTIN\Administrators, trying NT AUTHORITY\SYSTEM" -Type Warning
+                }
+            }
+            
+            # Final attempt with NT AUTHORITY\SYSTEM
+            if (-not $ownershipSet) {
+                try {
+                    Take-Ownership -Path $NewContextMenueKey -User "NT AUTHORITY\SYSTEM" -Recurse
+                    $ownershipSet = $true
+                }
+                catch {
+                    Write-TweakLog -Message "All ownership attempts failed, proceeding with current permissions" -Type Warning
+                }
+            }
 
             $acl = Get-Acl $NewContextMenueKey
             $person = [System.Security.Principal.NTAccount]"EVERYONE"
@@ -529,10 +638,42 @@ try {
             $acl | Set-Acl
 
             Rename-Item $NewContextMenueKey $NewContextMenueKeyRenamed -Force
-            Write-TweakLog -Message "Successfully applied Windows 10-style context menu" -Type Success
+            Write-TweakLog -Message "Successfully applied Windows 10-style context menu (Method 1)" -Type Success
+            $contextMenuSet = $true
         }
         catch {
-            Write-TweakLog -Message "Failed to set Windows 10-style context menu: $_" -Type Error
+            Write-TweakLog -Message "Method 1 failed: $_" -Type Warning
+        }
+    }
+    
+    # Method 2: User-specific registry approach (doesn't require system-level permissions)
+    if (-not $contextMenuSet) {
+        try {
+            Write-TweakLog -Message "Trying user-specific context menu settings..." -Type Info
+            
+            # Disable Windows 11 context menu for current user
+            Set-RegistryValueSafely -Path "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" -Name "(Default)" -Value "" -Type String
+            
+            Write-TweakLog -Message "Successfully applied Windows 10-style context menu (Method 2)" -Type Success
+            $contextMenuSet = $true
+        }
+        catch {
+            Write-TweakLog -Message "Method 2 failed: $_" -Type Warning
+        }
+    }
+    
+    # Method 3: Group Policy approach (if available)
+    if (-not $contextMenuSet) {
+        try {
+            Write-TweakLog -Message "Trying Group Policy approach..." -Type Info
+            
+            # Set registry value to disable new context menu
+            Set-RegistryValueSafely -Path "HKCU:\Software\Policies\Microsoft\Windows\Explorer" -Name "DisableContextMenusInStart" -Value 1 -Type DWord
+            
+            Write-TweakLog -Message "Applied context menu policy settings" -Type Info
+        }
+        catch {
+            Write-TweakLog -Message "Method 3 failed: $_" -Type Warning
         }
     }
 
@@ -606,48 +747,48 @@ catch {
 Write-TweakLog -Message "Script execution complete" -Type Success
 
 
-$PowerSettings = Get-WmiObject -Namespace root\cimv2\power -Class Win32_PowerPlan | ForEach-Object {
-    $PlanGuid = $_.InstanceID.Split('\')[-1]
-    $PlanName = $_.ElementName
-    $SubGroups = Get-WmiObject -Namespace root\cimv2\power -Class Win32_PowerPlanSetting | Where-Object { $_.PlanGuid -eq $PlanGuid }
+# $PowerSettings = Get-WmiObject -Namespace root\cimv2\power -Class Win32_PowerPlan | ForEach-Object {
+#     $PlanGuid = $_.InstanceID.Split('\')[-1]
+#     $PlanName = $_.ElementName
+#     $SubGroups = Get-WmiObject -Namespace root\cimv2\power -Class Win32_PowerPlanSetting | Where-Object { $_.PlanGuid -eq $PlanGuid }
 
-    [PSCustomObject]@{
-        PlanGuid  = $PlanGuid
-        PlanName  = $PlanName
-        SubGroups = $SubGroups | Group-Object -Property SubGroupGuid | ForEach-Object {
-            $SubGroupGuid = $_.Name
-            $SubGroupName = ($_.Group | Select-Object -First 1).SubGroupName
-            $Settings = $_.Group | ForEach-Object {
-                [PSCustomObject]@{
-                    SettingGuid  = $_.SettingGuid
-                    SettingName  = $_SettingName
-                    SettingValue = $_SettingValue
-                }
-            }
-            [PSCustomObject]@{
-                SubGroupGuid = $SubGroupGuid
-                SubGroupName = $SubGroupName
-                Settings     = $Settings
-            }
-        }
-    }
-}
+#     [PSCustomObject]@{
+#         PlanGuid  = $PlanGuid
+#         PlanName  = $PlanName
+#         SubGroups = $SubGroups | Group-Object -Property SubGroupGuid | ForEach-Object {
+#             $SubGroupGuid = $_.Name
+#             $SubGroupName = ($_.Group | Select-Object -First 1).SubGroupName
+#             $Settings = $_.Group | ForEach-Object {
+#                 [PSCustomObject]@{
+#                     SettingGuid  = $_.SettingGuid
+#                     SettingName  = $_SettingName
+#                     SettingValue = $_SettingValue
+#                 }
+#             }
+#             [PSCustomObject]@{
+#                 SubGroupGuid = $SubGroupGuid
+#                 SubGroupName = $SubGroupName
+#                 Settings     = $Settings
+#             }
+#         }
+#     }
+# }
 
-# Now $PowerSettings contains the power settings.
-# Example: Accessing the first power plan's name:
-$PowerSettings[0].PlanName
+# # Now $PowerSettings contains the power settings.
+# # Example: Accessing the first power plan's name:
+# $PowerSettings[0].PlanName
 
-#Example: Accessing the first subgroup of the first power plan
-$PowerSettings[0].SubGroups[0].SubGroupName
+# #Example: Accessing the first subgroup of the first power plan
+# $PowerSettings[0].SubGroups[0].SubGroupName
 
-#Example: Accessing the first setting within the first subgroup of the first power plan
-$PowerSettings[0].SubGroups[0].Settings[0].SettingName
+# #Example: Accessing the first setting within the first subgroup of the first power plan
+# $PowerSettings[0].SubGroups[0].Settings[0].SettingName
 
-#Example: Accessing the value of the first setting within the first subgroup of the first power plan
-$PowerSettings[0].SubGroups[0].Settings[0].SettingValue
+# #Example: Accessing the value of the first setting within the first subgroup of the first power plan
+# $PowerSettings[0].SubGroups[0].Settings[0].SettingValue
 
-#Example : Displaying all power plans
-$PowerSettings | Format-List -Property PlanName, PlanGuid, SubGroups
+# #Example : Displaying all power plans
+# $PowerSettings | Format-List -Property PlanName, PlanGuid, SubGroups
 
-#Example : Displaying all settings of a specific plan. Replace the GUID with your plans guid.
-$PowerSettings | Where-Object { $_.PlanGuid -eq "your-plan-guid-here" } | Select-Object -ExpandProperty SubGroups | Select-Object -ExpandProperty Settings
+# #Example : Displaying all settings of a specific plan. Replace the GUID with your plans guid.
+# $PowerSettings | Where-Object { $_.PlanGuid -eq "your-plan-guid-here" } | Select-Object -ExpandProperty SubGroups | Select-Object -ExpandProperty Settings
