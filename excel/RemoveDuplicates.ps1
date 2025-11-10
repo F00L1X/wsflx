@@ -44,8 +44,12 @@ function Fix-UmlautEncoding {
     # Ü (U+00DC): C3 9C
     $result = $result.Replace("$([char]0xC3)$([char]0x9C)", "$([char]0xDC)")
 
-    # ß (U+00DF): C3 9F
+    # ß (U+00DF): C3 9F (normal double-encoding)
     $result = $result.Replace("$([char]0xC3)$([char]0x9F)", "$([char]0xDF)")
+
+    # ÃŸ special case: U+00C3 U+0178 (misencoded ß)
+    # This appears as "ÃŸ" in the file (Ã = U+00C3, Ÿ = U+0178)
+    $result = $result.Replace("$([char]0xC3)$([char]0x0178)", "$([char]0xDF)")
 
     # é (U+00E9): C3 A9
     $result = $result.Replace("$([char]0xC3)$([char]0xA9)", "$([char]0xE9)")
@@ -92,7 +96,8 @@ function Process-CSVFile {
             $LogBox.Select($LogBox.Text.Length, 0)
             $LogBox.ScrollToCaret()
             [System.Windows.Forms.Application]::DoEvents()
-        } else {
+        }
+        else {
             Write-Host $Message -ForegroundColor $(if ($Color -eq "Black") { "White" } else { $Color })
         }
     }
@@ -126,7 +131,8 @@ function Process-CSVFile {
 
             Write-Log "Umlaut encoding fixed! Using temp file for import." "Green"
             $fileToImport = $tempFile
-        } else {
+        }
+        else {
             $fileToImport = $InputPath
         }
 
@@ -181,7 +187,8 @@ function Process-CSVFile {
             # Write to file
             $allLines = @($headerLine) + $dataLines
             [System.IO.File]::WriteAllLines($OutputPath, $allLines, [System.Text.UTF8Encoding]::new($false))
-        } else {
+        }
+        else {
             $sortedData | Export-Csv -Path $OutputPath -NoTypeInformation -Encoding UTF8 -Delimiter $CsvDelimiter
         }
 
@@ -232,19 +239,19 @@ if ($GUI -or (-not $InputFile -and -not $OutputFile)) {
     $buttonBrowseInput.Size = New-Object System.Drawing.Size(80, 25)
     $buttonBrowseInput.Text = "Browse..."
     $buttonBrowseInput.Add_Click({
-        $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
-        $openFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
-        $openFileDialog.Title = "Select Input CSV File"
-        if ($openFileDialog.ShowDialog() -eq "OK") {
-            $textBoxInput.Text = $openFileDialog.FileName
-            # Auto-generate output filename
-            $inputPath = $openFileDialog.FileName
-            $directory = [System.IO.Path]::GetDirectoryName($inputPath)
-            $filename = [System.IO.Path]::GetFileNameWithoutExtension($inputPath)
-            $extension = [System.IO.Path]::GetExtension($inputPath)
-            $textBoxOutput.Text = Join-Path $directory "$($filename)_noDups$extension"
-        }
-    })
+            $openFileDialog = New-Object System.Windows.Forms.OpenFileDialog
+            $openFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            $openFileDialog.Title = "Select Input CSV File"
+            if ($openFileDialog.ShowDialog() -eq "OK") {
+                $textBoxInput.Text = $openFileDialog.FileName
+                # Auto-generate output filename
+                $inputPath = $openFileDialog.FileName
+                $directory = [System.IO.Path]::GetDirectoryName($inputPath)
+                $filename = [System.IO.Path]::GetFileNameWithoutExtension($inputPath)
+                $extension = [System.IO.Path]::GetExtension($inputPath)
+                $textBoxOutput.Text = Join-Path $directory "$($filename)_noDups$extension"
+            }
+        })
     $form.Controls.Add($buttonBrowseInput)
 
     # Output file label
@@ -266,13 +273,13 @@ if ($GUI -or (-not $InputFile -and -not $OutputFile)) {
     $buttonBrowseOutput.Size = New-Object System.Drawing.Size(80, 25)
     $buttonBrowseOutput.Text = "Browse..."
     $buttonBrowseOutput.Add_Click({
-        $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
-        $saveFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
-        $saveFileDialog.Title = "Select Output CSV File"
-        if ($saveFileDialog.ShowDialog() -eq "OK") {
-            $textBoxOutput.Text = $saveFileDialog.FileName
-        }
-    })
+            $saveFileDialog = New-Object System.Windows.Forms.SaveFileDialog
+            $saveFileDialog.Filter = "CSV files (*.csv)|*.csv|All files (*.*)|*.*"
+            $saveFileDialog.Title = "Select Output CSV File"
+            if ($saveFileDialog.ShowDialog() -eq "OK") {
+                $textBoxOutput.Text = $saveFileDialog.FileName
+            }
+        })
     $form.Controls.Add($buttonBrowseOutput)
 
     # Fix umlaut encoding checkbox
@@ -314,29 +321,30 @@ if ($GUI -or (-not $InputFile -and -not $OutputFile)) {
     $buttonProcess.BackColor = [System.Drawing.Color]::LightGreen
     $buttonProcess.Font = New-Object System.Drawing.Font("Arial", 10, [System.Drawing.FontStyle]::Bold)
     $buttonProcess.Add_Click({
-        if ([string]::IsNullOrWhiteSpace($textBoxInput.Text)) {
-            [System.Windows.Forms.MessageBox]::Show("Please select an input file.", "Error", "OK", "Error")
-            return
-        }
-        if ([string]::IsNullOrWhiteSpace($textBoxOutput.Text)) {
-            [System.Windows.Forms.MessageBox]::Show("Please select an output file.", "Error", "OK", "Error")
-            return
-        }
+            if ([string]::IsNullOrWhiteSpace($textBoxInput.Text)) {
+                [System.Windows.Forms.MessageBox]::Show("Please select an input file.", "Error", "OK", "Error")
+                return
+            }
+            if ([string]::IsNullOrWhiteSpace($textBoxOutput.Text)) {
+                [System.Windows.Forms.MessageBox]::Show("Please select an output file.", "Error", "OK", "Error")
+                return
+            }
 
-        $buttonProcess.Enabled = $false
-        $textBoxLog.Clear()
+            $buttonProcess.Enabled = $false
+            $textBoxLog.Clear()
 
-        $delimiterToUse = if ([string]::IsNullOrWhiteSpace($textBoxDelimiter.Text)) { ';' } else { $textBoxDelimiter.Text }
-        $result = Process-CSVFile -InputPath $textBoxInput.Text -OutputPath $textBoxOutput.Text -FixEncoding $checkBoxFixEncoding.Checked -CsvDelimiter $delimiterToUse -RemoveQuotes $checkBoxNoQuotes.Checked -LogBox $textBoxLog
+            $delimiterToUse = if ([string]::IsNullOrWhiteSpace($textBoxDelimiter.Text)) { ';' } else { $textBoxDelimiter.Text }
+            $result = Process-CSVFile -InputPath $textBoxInput.Text -OutputPath $textBoxOutput.Text -FixEncoding $checkBoxFixEncoding.Checked -CsvDelimiter $delimiterToUse -RemoveQuotes $checkBoxNoQuotes.Checked -LogBox $textBoxLog
 
-        $buttonProcess.Enabled = $true
+            $buttonProcess.Enabled = $true
 
-        if ($result) {
-            [System.Windows.Forms.MessageBox]::Show("CSV processing completed successfully!", "Success", "OK", "Information")
-        } else {
-            [System.Windows.Forms.MessageBox]::Show("CSV processing failed. Check the log for details.", "Error", "OK", "Error")
-        }
-    })
+            if ($result) {
+                [System.Windows.Forms.MessageBox]::Show("CSV processing completed successfully!", "Success", "OK", "Information")
+            }
+            else {
+                [System.Windows.Forms.MessageBox]::Show("CSV processing failed. Check the log for details.", "Error", "OK", "Error")
+            }
+        })
     $form.Controls.Add($buttonProcess)
 
     # Log label
@@ -367,7 +375,8 @@ if (-not [string]::IsNullOrWhiteSpace($InputFile) -and -not [string]::IsNullOrWh
     if (-not $result) {
         exit 1
     }
-} else {
+}
+else {
     Write-Host "ERROR: Both InputFile and OutputFile parameters are required for command-line mode." -ForegroundColor Red
     Write-Host "For GUI mode, run the script without parameters or with -GUI flag." -ForegroundColor Yellow
     exit 1
