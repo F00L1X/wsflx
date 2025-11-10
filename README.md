@@ -14,6 +14,7 @@ A collection of PowerShell scripts to set up, maintain, clean, and optimize Wind
   - [🧹 Windows 11 Debloat Script](#-windows-11-debloat-script)
   - [🖌️ Windows 11 UI Tweaks](#-windows-11-ui-tweaks)
   - [🗑️ GitHub Artifacts Manager](#-github-artifacts-manager)
+  - [📊 CSV Duplicate Remover](#-csv-duplicate-remover)
 - [Coming Soon](#-coming-soon)
 - [Contributions](#-contributions)
 - [License](#-license)
@@ -99,6 +100,26 @@ git clone https://github.com/F00L1X/wsflx.git; cd wsflx/git; Set-ExecutionPolicy
 ```
 
 [📚 Learn more about GitHub Artifacts Manager](git/readme.md)
+
+### 📊 CSV Duplicate Remover
+
+Remove duplicate rows from CSV files with a user-friendly GUI and automatic encoding fix for German umlauts and special characters.
+
+#### 🚀 Quick Start
+
+##### Option 1: Download and run (recommended)
+Copy & paste it to your terminal:
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/excel/RemoveDuplicates.ps1" -OutFile "$env:TEMP\RemoveDuplicates.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\RemoveDuplicates.ps1" -GUI
+```
+
+##### Option 2: Clone and run locally
+Copy & paste it to your terminal:
+```powershell
+git clone https://github.com/F00L1X/wsflx.git; cd wsflx/excel; Set-ExecutionPolicy Bypass -Scope Process -Force; .\RemoveDuplicates.ps1 -GUI
+```
+
+[📚 Learn more about CSV Duplicate Remover](excel/readme.md)
 
 ## 🔜 Coming Soon
 

@@ -36,19 +36,36 @@ A powerful PowerShell script designed to remove unnecessary bloatware, disable t
 ### 💻 Installation
 
 #### Option 1: Direct download and run (recommended)
-
+Downloads and runs the script directly without cloning the entire repository:
 ```powershell
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/debloat/debloatW11.ps1" -OutFile "$env:TEMP\debloatW11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\debloatW11.ps1"
 ```
 
-#### Option 2: Clone repository and run locally
+**What this does:**
+1. Downloads the script from GitHub to your temporary folder
+2. Temporarily bypasses PowerShell execution policy for this session
+3. Executes the debloat script
 
+#### Option 2: Clone repository and run locally
+Clones the entire repository to your machine for offline access and easier updates:
 ```powershell
 git clone https://github.com/F00L1X/wsflx.git
 cd wsflx/debloat
 Set-ExecutionPolicy Bypass -Scope Process -Force
 .\debloatW11.ps1
 ```
+
+**What this does:**
+1. Clones the entire wsflx repository to your current directory
+2. Navigates to the debloat folder
+3. Temporarily bypasses PowerShell execution policy
+4. Runs the debloat script
+
+**Benefits of cloning:**
+- Access to all scripts in the repository
+- Easy to update with `git pull`
+- Can review and customize the script before running
+- No internet required after initial clone
 
 ## 🔧 How It Works
 

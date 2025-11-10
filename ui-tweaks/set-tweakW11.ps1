@@ -185,7 +185,7 @@ using System.Runtime.InteropServices;
             # If no domain specified, use local computer name
             $Account = @($env:COMPUTERNAME, $User)
         }
-        
+
         try {
             $Owner = New-Object System.Security.Principal.NTAccount($Account[0], $Account[1])
             Write-TweakLog -Message "Change ownership to '$($Account[0])\$($Account[1])'" -Type Info
@@ -533,19 +533,19 @@ function Get-CurrentUserSID {
         if ($localUser -and $localUser.SID) {
             return $localUser.SID.Value
         }
-        
+
         # Second method using CIM query with proper syntax
         $userAccount = Get-CimInstance -Query "Select * from Win32_UserAccount WHERE Name='$env:USERNAME'" -ErrorAction SilentlyContinue
         if ($userAccount -and $userAccount.SID) {
             return $userAccount.SID
         }
-        
+
         # Third method using .NET (most compatible)
         $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent()
         if ($currentUser -and $currentUser.User) {
             return $currentUser.User.Value
         }
-        
+
         # Final fallback using NTAccount translation
         $objUser = New-Object System.Security.Principal.NTAccount($env:USERDOMAIN, $env:USERNAME)
         $strSID = $objUser.Translate([System.Security.Principal.SecurityIdentifier])
@@ -579,13 +579,13 @@ try {
 
     # Old Context Menu - Multiple approaches
     Write-TweakLog -Message "Setting Windows 10-style context menu..." -Type Info
-    
+
     # Method 1: Registry rename approach (requires elevated permissions)
     $NewContextMenueKeyRenamed = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\-{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}"
     $NewContextMenueKey = "Registry::HKEY_LOCAL_MACHINE\SOFTWARE\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}"
 
     $contextMenuSet = $false
-    
+
     if (Test-Path $NewContextMenueKeyRenamed) {
         Write-TweakLog -Message "Context menu key already renamed" -Type Info
         $contextMenuSet = $true
@@ -594,7 +594,7 @@ try {
         try {
             # Try multiple approaches for taking ownership
             $ownershipSet = $false
-            
+
             # Try with full domain\username format first
             try {
                 $fullUserName = "$env:USERDOMAIN\$env:USERNAME"
@@ -604,7 +604,7 @@ try {
             catch {
                 Write-TweakLog -Message "Failed with domain\username format, trying alternative methods" -Type Warning
             }
-            
+
             # If that fails, try with BUILTIN\Administrators
             if (-not $ownershipSet) {
                 try {
@@ -615,7 +615,7 @@ try {
                     Write-TweakLog -Message "Failed with BUILTIN\Administrators, trying NT AUTHORITY\SYSTEM" -Type Warning
                 }
             }
-            
+
             # Final attempt with NT AUTHORITY\SYSTEM
             if (-not $ownershipSet) {
                 try {
@@ -645,15 +645,15 @@ try {
             Write-TweakLog -Message "Method 1 failed: $_" -Type Warning
         }
     }
-    
+
     # Method 2: User-specific registry approach (doesn't require system-level permissions)
     if (-not $contextMenuSet) {
         try {
             Write-TweakLog -Message "Trying user-specific context menu settings..." -Type Info
-            
+
             # Disable Windows 11 context menu for current user
             Set-RegistryValueSafely -Path "HKCU:\Software\Classes\CLSID\{86ca1aa0-34aa-4e8b-a509-50c905bae2a2}\InprocServer32" -Name "(Default)" -Value "" -Type String
-            
+
             Write-TweakLog -Message "Successfully applied Windows 10-style context menu (Method 2)" -Type Success
             $contextMenuSet = $true
         }
@@ -661,15 +661,15 @@ try {
             Write-TweakLog -Message "Method 2 failed: $_" -Type Warning
         }
     }
-    
+
     # Method 3: Group Policy approach (if available)
     if (-not $contextMenuSet) {
         try {
             Write-TweakLog -Message "Trying Group Policy approach..." -Type Info
-            
+
             # Set registry value to disable new context menu
             Set-RegistryValueSafely -Path "HKCU:\Software\Policies\Microsoft\Windows\Explorer" -Name "DisableContextMenusInStart" -Value 1 -Type DWord
-            
+
             Write-TweakLog -Message "Applied context menu policy settings" -Type Info
         }
         catch {

@@ -63,19 +63,36 @@ After running, you'll have a stylish, feature-rich terminal environment ready fo
 ## 💻 Installation
 
 ### Option 1: Direct download and run (recommended)
-
+Downloads and runs the script directly without cloning the entire repository:
 ```powershell
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/terminal-styling/style_terminal_w11.ps1" -OutFile "$env:TEMP\style_terminal_w11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\style_terminal_w11.ps1"
 ```
 
-### Option 2: Clone repository and run locally
+**What this does:**
+1. Downloads the script from GitHub to your temporary folder
+2. Temporarily bypasses PowerShell execution policy for this session
+3. Executes the terminal styling script
 
+### Option 2: Clone repository and run locally
+Clones the entire repository to your machine for offline access and easier updates:
 ```powershell
 git clone https://github.com/F00L1X/wsflx.git
 cd wsflx/terminal-styling
 Set-ExecutionPolicy Bypass -Scope Process -Force
 .\style_terminal_w11.ps1
 ```
+
+**What this does:**
+1. Clones the entire wsflx repository to your current directory
+2. Navigates to the terminal-styling folder
+3. Temporarily bypasses PowerShell execution policy
+4. Runs the terminal styling script
+
+**Benefits of cloning:**
+- Access to all scripts in the repository
+- Easy to update with `git pull`
+- Can customize the script locally
+- No internet required after initial clone
 
 ## 🔍 Troubleshooting
 

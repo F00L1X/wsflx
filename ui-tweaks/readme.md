@@ -45,13 +45,18 @@ A specialized PowerShell script designed to customize the Windows 11 user interf
 ### 💻 Installation
 
 #### Option 1: Direct download and run (recommended)
-
+Downloads and runs the script directly without cloning the entire repository:
 ```powershell
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/ui-tweaks/set-tweakW11.ps1" -OutFile "$env:TEMP\set-tweakW11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\set-tweakW11.ps1"
 ```
 
-#### Option 2: Clone repository and run locally
+**What this does:**
+1. Downloads the script from GitHub to your temporary folder
+2. Temporarily bypasses PowerShell execution policy for this session
+3. Executes the UI tweaks script
 
+#### Option 2: Clone repository and run locally
+Clones the entire repository to your machine for offline access and easier updates:
 ```powershell
 git clone https://github.com/F00L1X/wsflx.git
 cd wsflx/ui-tweaks
@@ -59,18 +64,34 @@ Set-ExecutionPolicy Bypass -Scope Process -Force
 .\set-tweakW11.ps1
 ```
 
+**What this does:**
+1. Clones the entire wsflx repository to your current directory
+2. Navigates to the ui-tweaks folder
+3. Temporarily bypasses PowerShell execution policy
+4. Runs the UI tweaks script
+
+**Benefits of cloning:**
+- Access to all scripts in the repository
+- Easy to update with `git pull`
+- Can customize tweaks before applying
+- No internet required after initial clone
+
 ### 🔄 Uninstallation
 
 #### Option 1: Direct download and run (recommended)
-
+Downloads and runs the revert script directly:
 ```powershell
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/ui-tweaks/revert-tweakW11.ps1" -OutFile "$env:TEMP\revert-tweakW11.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\revert-tweakW11.ps1"
 ```
 
-#### Option 2: Clone repository and run locally
+**What this does:**
+1. Downloads the revert script from GitHub to your temporary folder
+2. Temporarily bypasses PowerShell execution policy for this session
+3. Executes the revert script to undo all UI tweaks
 
+#### Option 2: Clone repository and run locally
+If you already have the repository cloned:
 ```powershell
-git clone https://github.com/F00L1X/wsflx.git
 cd wsflx/ui-tweaks
 Set-ExecutionPolicy Bypass -Scope Process -Force
 .\revert-tweakW11.ps1

@@ -27,16 +27,33 @@ A PowerShell script with a modern dark-themed UI to manage GitHub workflow artif
 ## 🚀 Quick Start
 
 ### Option 1: Download and run (recommended)
-Copy & paste it to your admin terminal:
+Downloads and runs the script directly without cloning the entire repository:
 ```powershell
 Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/git/manage-git-artifacts.ps1" -OutFile "$env:TEMP\manage-git-artifacts.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\manage-git-artifacts.ps1"
 ```
 
+**What this does:**
+1. Downloads the script from GitHub to your temporary folder
+2. Temporarily bypasses PowerShell execution policy for this session
+3. Launches the GitHub Artifacts Manager GUI
+
 ### Option 2: Clone and run locally
-Copy & paste it to your admin terminal:
+Clones the entire repository to your machine for offline access and easier updates:
 ```powershell
 git clone https://github.com/F00L1X/wsflx.git; cd wsflx/git; Set-ExecutionPolicy Bypass -Scope Process -Force; .\manage-git-artifacts.ps1
 ```
+
+**What this does:**
+1. Clones the entire wsflx repository to your current directory
+2. Navigates to the git folder
+3. Temporarily bypasses PowerShell execution policy
+4. Runs the GitHub Artifacts Manager
+
+**Benefits of cloning:**
+- Access to all scripts in the repository
+- Easy to update with `git pull`
+- Can customize the script locally
+- No internet required after initial clone
 
 ## 🔧 Requirements
 
