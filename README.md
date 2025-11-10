@@ -14,6 +14,7 @@ A collection of PowerShell scripts to set up, maintain, clean, and optimize Wind
   - [🧹 Windows 11 Debloat Script](#-windows-11-debloat-script)
   - [🖌️ Windows 11 UI Tweaks](#-windows-11-ui-tweaks)
   - [🗑️ GitHub Artifacts Manager](#-github-artifacts-manager)
+  - [🔄 Git Reset Helper](#-git-reset-helper)
   - [📊 CSV Duplicate Remover](#-csv-duplicate-remover)
 - [Coming Soon](#-coming-soon)
 - [Contributions](#-contributions)
@@ -100,6 +101,26 @@ git clone https://github.com/F00L1X/wsflx.git; cd wsflx/git; Set-ExecutionPolicy
 ```
 
 [📚 Learn more about GitHub Artifacts Manager](git/readme.md)
+
+### 🔄 Git Reset Helper
+
+An interactive Node.js CLI tool that simplifies resetting Git branches to specific commits with a user-friendly interface.
+
+#### 🚀 Quick Start
+
+##### Option 1: Download and run (recommended)
+Copy & paste it to your terminal:
+```bash
+curl -o git-reset-helper.js https://raw.githubusercontent.com/F00L1X/wsflx/main/git/git-reset-branch/git-reset-helper.js && node git-reset-helper.js
+```
+
+##### Option 2: Clone and run locally
+Copy & paste it to your terminal:
+```bash
+git clone https://github.com/F00L1X/wsflx.git; cd wsflx/git/git-reset-branch; node git-reset-helper.js
+```
+
+[📚 Learn more about Git Reset Helper](git/git-reset-branch/readme.md)
 
 ### 📊 CSV Duplicate Remover
 
