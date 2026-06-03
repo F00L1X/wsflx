@@ -4,5 +4,30 @@
 			"path": "."
 		}
 	],
-	"settings": {}
+	"settings": {
+		// Windows-only PowerShell scripts: keep CRLF and a final newline.
+		"files.eol": "\r\n",
+		"files.encoding": "utf8",
+		"files.insertFinalNewline": true,
+		"files.trimTrailingWhitespace": true,
+
+		// PowerShell is the primary language in this repo.
+		"[powershell]": {
+			"editor.defaultFormatter": "ms-vscode.powershell",
+			"editor.tabSize": 4,
+			"editor.insertSpaces": true
+		},
+		"powershell.codeFormatting.preset": "OTBS",
+		"powershell.codeFormatting.autoCorrectAliases": true,
+		"powershell.integratedConsole.showOnStartup": false,
+
+		"[markdown]": {
+			"files.trimTrailingWhitespace": false
+		}
+	},
+	"extensions": {
+		"recommendations": [
+			"ms-vscode.powershell"
+		]
+	}
 }

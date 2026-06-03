@@ -16,6 +16,7 @@ A collection of PowerShell scripts to set up, maintain, clean, and optimize Wind
   - [🗑️ GitHub Artifacts Manager](#-github-artifacts-manager)
   - [🔄 Git Reset Helper](#-git-reset-helper)
   - [📊 CSV Duplicate Remover](#-csv-duplicate-remover)
+  - [🧽 Flush Web Caches](#-flush-web-caches)
 - [Coming Soon](#-coming-soon)
 - [Contributions](#-contributions)
 - [License](#-license)
@@ -141,6 +142,26 @@ git clone https://github.com/F00L1X/wsflx.git; cd wsflx/excel; Set-ExecutionPoli
 ```
 
 [📚 Learn more about CSV Duplicate Remover](excel/readme.md)
+
+### 🧽 Flush Web Caches
+
+Clear every cache layer (DNS, service workers, HTTP/code/GPU caches, Alt-Svc/QUIC state) that can make a freshly-deployed change *not* show up in the browser. Fixes the "I deployed but still see the old site" problem after a Coolify deploy, DNS change, or Cloudflare proxy cutover. Cookies, logins, and history are left untouched.
+
+#### 🚀 Quick Start
+
+##### Option 1: Download and run (recommended)
+Copy & paste it to your admin terminal:
+```powershell
+Invoke-WebRequest -Uri "https://raw.githubusercontent.com/F00L1X/wsflx/main/caching/Flush-WebCaches.ps1" -OutFile "$env:TEMP\Flush-WebCaches.ps1";Set-ExecutionPolicy Bypass -Scope Process -Force; & "$env:TEMP\Flush-WebCaches.ps1" -CloseBrowsers
+```
+
+##### Option 2: Clone and run locally
+Copy & paste it to your admin terminal:
+```powershell
+git clone https://github.com/F00L1X/wsflx.git; cd wsflx/caching; Set-ExecutionPolicy Bypass -Scope Process -Force; .\Flush-WebCaches.ps1 -CloseBrowsers
+```
+
+[📚 Learn more about Flush Web Caches](caching/readme.md)
 
 ## 🔜 Coming Soon
 
